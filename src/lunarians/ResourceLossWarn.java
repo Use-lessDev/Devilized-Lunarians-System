@@ -17,199 +17,200 @@ import mindustry.type.Item;
 import mindustry.type.ItemStack;
 import mindustry.world.Block;
 import mindustry.world.blocks.production.GenericCrafter;
+import mindustry.world.consumers.Consume;
 import mindustry.world.consumers.ConsumeItems;
 import mindustry.world.modules.ItemModule;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/ResourceLossWarn.class */
 public class ResourceLossWarn {
-    public static final int PANELS = 4;
-    public static final int MAX_SLOTS = 25;
-    private static final float SAMPLE = 0.5f;
-    private static final float SMOOTH = 0.35f;
-    private static final int SUSTAIN = 4;
-    private static final float COOLDOWN = 30.0f;
-    private static final ObjectFloatMap<Item> acc = new ObjectFloatMap<>();
-    private static final ObjectIntMap<Item> last = new ObjectIntMap<>();
-    private static final ObjectFloatMap<Item> ema = new ObjectFloatMap<>();
-    private static final ObjectIntMap<Item> streak = new ObjectIntMap<>();
-    private static final ObjectFloatMap<Item> lastWarn = new ObjectFloatMap<>();
-    private static float clock;
-    private static float timer;
-    private static boolean errorLogged;
-
-    public static void init() {
-        if (Vars.headless) {
-            return;
-        }
-        Events.run(EventType.Trigger.update, new Runnable() { // from class: lunarians.ResourceLossWarn.1
-            @Override // java.lang.Runnable
-            public void run() {
-                ResourceLossWarn.update();
-            }
+  public static final int PANELS = 4;
+  
+  public static final int MAX_SLOTS = 25;
+  
+  private static final float SAMPLE = 0.5F;
+  
+  private static final float SMOOTH = 0.35F;
+  
+  private static final int SUSTAIN = 4;
+  
+  private static final float COOLDOWN = 30.0F;
+  
+  private static final ObjectFloatMap<Item> acc = new ObjectFloatMap();
+  
+  private static final ObjectIntMap<Item> last = new ObjectIntMap();
+  
+  private static final ObjectFloatMap<Item> ema = new ObjectFloatMap();
+  
+  private static final ObjectIntMap<Item> streak = new ObjectIntMap();
+  
+  private static final ObjectFloatMap<Item> lastWarn = new ObjectFloatMap();
+  
+  private static float clock;
+  
+  private static float timer;
+  
+  private static boolean errorLogged;
+  
+  public static void init() {
+    if (Vars.headless)
+      return; 
+    Events.run(EventType.Trigger.update, new Runnable() {
+          public void run() {
+            ResourceLossWarn.update();
+          }
         });
-        Events.on(EventType.WorldLoadEvent.class, new Cons<EventType.WorldLoadEvent>() { // from class: lunarians.ResourceLossWarn.2
-            public void get(EventType.WorldLoadEvent worldLoadEvent) {
-                ResourceLossWarn.reset();
-            }
+    Events.on(EventType.WorldLoadEvent.class, new Cons<EventType.WorldLoadEvent>() {
+          public void get(EventType.WorldLoadEvent param1WorldLoadEvent) {
+            ResourceLossWarn.reset();
+          }
         });
-    }
-
-    public static void reset() {
-        acc.clear();
-        last.clear();
-        ema.clear();
-        streak.clear();
-        lastWarn.clear();
-        timer = 0.0f;
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    public static void update() {
-        if (!LunariansSettings.enableLossWarn || Vars.state == null || !Vars.state.isGame() || Vars.player == null) {
-            return;
-        }
-        float f = Time.delta / 60.0f;
-        if (f <= 0.0f) {
-            return;
-        }
-        clock += f;
-        float f2 = timer + f;
-        timer = f2;
-        if (f2 < SAMPLE) {
-            return;
-        }
-        float f3 = timer;
-        timer = 0.0f;
-        try {
-            sample(f3);
-        } catch (Throwable th) {
-            if (!errorLogged) {
-                errorLogged = true;
-                Log.err("[Lunarians] ResourceLossWarn error", th);
-            }
-        }
-    }
-
-    private static void sample(float f) {
-        Item item;
-        Team team = Vars.player.team();
-        if (team == null || team.core() == null) {
-            return;
-        }
-        ItemModule items = team.items();
-        Seq<LossSlot> lossSlots = LunariansSettings.lossSlots(LunariansSettings.lossPanel);
-        for (int i = 0; i < lossSlots.size; i++) {
-            LossSlot lossSlot = (LossSlot) lossSlots.get(i);
-            if (lossSlot != null && !lossSlot.item.isEmpty() && (item = Vars.content.item(lossSlot.item)) != null) {
-                float f2 = acc.get(item, 0.0f) + f;
-                if (f2 < Math.max(1.0f, lossSlot.delay) - 0.01f) {
-                    acc.put(item, f2);
-                } else {
-                    acc.put(item, 0.0f);
-                    int i2 = items.get(item);
-                    if (last.containsKey(item)) {
-                        float f3 = (last.get(item, i2) - i2) / f2;
-                        last.put(item, i2);
-                        float min = Math.min(1.0f, SMOOTH * Math.max(1.0f, lossSlot.delay));
-                        float f4 = (ema.get(item, 0.0f) * (1.0f - min)) + (f3 * min);
-                        ema.put(item, f4);
-                        if (f4 >= lossSlot.perSec) {
-                            int i3 = streak.get(item, 0) + 1;
-                            streak.put(item, i3);
-                            if (i3 >= Math.max(1, Math.round(4.0f / Math.max(1.0f, lossSlot.delay))) && clock - lastWarn.get(item, -999.0f) > COOLDOWN) {
-                                lastWarn.put(item, clock);
-                                warn(team, item, f4);
-                            }
-                        } else {
-                            streak.put(item, 0);
-                        }
-                    } else {
-                        last.put(item, i2);
-                        ema.put(item, 0.0f);
-                    }
-                }
-            }
-        }
-    }
-
-    private static void warn(Team team, Item item, float f) {
-        String str = LunariansI18n.get("loss_warn", fmt(f), item.localizedName) + " " + item.emoji();
-        String consumers = consumers(team, item, f);
-        if (!consumers.isEmpty()) {
-            str = str + LunariansI18n.get("loss_by", consumers);
-        }
-        try {
-            Vars.ui.chatfrag.addMessage(str);
-        } catch (Throwable th) {
-        }
-    }
-
-    private static String consumers(Team team, Item item, float f) {
-        ObjectIntMap objectIntMap = new ObjectIntMap();
-        final ObjectFloatMap objectFloatMap = new ObjectFloatMap();
-        Seq seq = team.data().buildings;
-        for (int i = 0; i < seq.size; i++) {
-            Object obj = seq.get(i);
-            if (obj != null && ((Building) obj).isValid() && (((Building) obj).block instanceof GenericCrafter) && ((Building) obj).efficiency > 0.0f && ((Building) obj).shouldConsume()) {
-                float amountPerCraft = amountPerCraft(((Building) obj).block, item);
-                if (amountPerCraft > 0.0f) {
-                    float f2 = (amountPerCraft / (((Building) obj).block.craftTime / 60.0f)) * ((Building) obj).efficiency;
-                    objectIntMap.increment(((Building) obj).block, 0, 1);
-                    objectFloatMap.put(((Building) obj).block, objectFloatMap.get(((Building) obj).block, 0.0f) + f2);
-                }
-            }
-        }
-        if (objectIntMap.size == 0) {
-            return LunariansI18n.get("loss_other");
-        }
-        Seq seq2 = new Seq();
-        ObjectIntMap.Keys it = objectIntMap.keys().iterator();
-        while (it.hasNext()) {
-            seq2.add((Block) it.next());
-        }
-        seq2.sort(new Comparator<Block>() { // from class: lunarians.ResourceLossWarn.3
-            @Override // java.util.Comparator
-            public int compare(Block block, Block block2) {
-                return Float.compare(objectFloatMap.get(block2, 0.0f), objectFloatMap.get(block, 0.0f));
-            }
+  }
+  
+  public static void reset() {
+    acc.clear();
+    last.clear();
+    ema.clear();
+    streak.clear();
+    lastWarn.clear();
+    timer = 0.0F;
+  }
+  
+  private static void update() {
+    if (!LunariansSettings.enableLossWarn || Vars.state == null || !Vars.state.isGame() || Vars.player == null)
+      return; 
+    float f1 = Time.delta / 60.0F;
+    if (f1 <= 0.0F)
+      return; 
+    clock += f1;
+    if ((timer += f1) < 0.5F)
+      return; 
+    float f2 = timer;
+    timer = 0.0F;
+    try {
+      sample(f2);
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] ResourceLossWarn error", throwable);
+      } 
+    } 
+  }
+  
+  private static void sample(float paramFloat) {
+    Team team = Vars.player.team();
+    if (team == null || team.core() == null)
+      return; 
+    ItemModule itemModule = team.items();
+    Seq<LossSlot> seq = LunariansSettings.lossSlots(LunariansSettings.lossPanel);
+    for (byte b = 0; b < seq.size; b++) {
+      LossSlot lossSlot = (LossSlot)seq.get(b);
+      Item item;
+      if (lossSlot != null && !lossSlot.item.isEmpty() && (item = Vars.content.item(lossSlot.item)) != null) {
+        float f = acc.get(item, 0.0F) + paramFloat;
+        if (f < Math.max(1.0F, lossSlot.delay) - 0.01F) {
+          acc.put(item, f);
+        } else {
+          acc.put(item, 0.0F);
+          float f1 = f;
+          int i = itemModule.get(item);
+          if (!last.containsKey(item)) {
+            last.put(item, i);
+            ema.put(item, 0.0F);
+          } else {
+            float f2 = (last.get(item, i) - i) / f1;
+            last.put(item, i);
+            float f3 = Math.min(1.0F, 0.35F * Math.max(1.0F, lossSlot.delay));
+            float f4 = ema.get(item, 0.0F) * (1.0F - f3) + f2 * f3;
+            ema.put(item, f4);
+            if (f4 >= lossSlot.perSec) {
+              int j = streak.get(item, 0) + 1;
+              streak.put(item, j);
+              if (j >= Math.max(1, Math.round(4.0F / Math.max(1.0F, lossSlot.delay))) && clock - lastWarn.get(item, -999.0F) > 30.0F) {
+                lastWarn.put(item, clock);
+                warn(team, item, f4);
+              } 
+            } else {
+              streak.put(item, 0);
+            } 
+          } 
+        } 
+      } 
+    } 
+  }
+  
+  private static void warn(Team paramTeam, Item paramItem, float paramFloat) {
+    String str1 = LunariansI18n.get("loss_warn", fmt(paramFloat), paramItem.localizedName) + " " + paramItem.emoji();
+    String str2 = consumers(paramTeam, paramItem, paramFloat);
+    if (!str2.isEmpty())
+      str1 = str1 + LunariansI18n.get("loss_by", str2); 
+    try {
+      Vars.ui.chatfrag.addMessage(str1);
+    } catch (Throwable throwable) {}
+  }
+  
+  private static String consumers(Team paramTeam, Item paramItem, float paramFloat) {
+    ObjectIntMap objectIntMap = new ObjectIntMap();
+    ObjectFloatMap objectFloatMap1 = new ObjectFloatMap();
+    Seq seq1 = (paramTeam.data()).buildings;
+    for (byte b1 = 0; b1 < seq1.size; b1++) {
+      Object object = seq1.get(b1);
+      float f1;
+      if (object != null && ((Building)object).isValid() && ((Building)object).block instanceof GenericCrafter && ((Building)object).efficiency > 0.0F && ((Building)object).shouldConsume() && (f1 = amountPerCraft(((Building)object).block, paramItem)) > 0.0F) {
+        GenericCrafter genericCrafter = (GenericCrafter)((Building)object).block;
+        float f2 = f1 / genericCrafter.craftTime / 60.0F * ((Building)object).efficiency;
+        objectIntMap.increment(((Building)object).block, 0, 1);
+        objectFloatMap1.put(((Building)object).block, objectFloatMap1.get(((Building)object).block, 0.0F) + f2);
+      } 
+    } 
+    if (objectIntMap.size == 0)
+      return LunariansI18n.get("loss_other"); 
+    Seq seq2 = new Seq();
+    for (ObjectIntMap.Keys<Block> keys = objectIntMap.keys().iterator(); keys.hasNext(); ) {
+      Block block = keys.next();
+      seq2.add(block);
+    } 
+    final ObjectFloatMap fm = objectFloatMap1;
+    seq2.sort(new Comparator<Block>() {
+          public int compare(Block param1Block1, Block param1Block2) {
+            return Float.compare(fm.get(param1Block2, 0.0F), fm.get(param1Block1, 0.0F));
+          }
         });
-        StringBuilder sb = new StringBuilder();
-        float f3 = 0.0f;
-        for (int i2 = 0; i2 < seq2.size; i2++) {
-            f3 += objectFloatMap.get((Block) seq2.get(i2), 0.0f);
-            if (i2 < 2) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
-                sb.append(((Block) seq2.get(i2)).localizedName).append(" x").append(objectIntMap.get((Block) seq2.get(i2), 0));
-            }
-        }
-        if (f3 < f * 0.6f) {
-            sb.append(", ").append(LunariansI18n.get("loss_other"));
-        }
-        return sb.toString();
-    }
-
-    private static float amountPerCraft(Block block, Item item) {
-        if (block.consumers == null) {
-            return 0.0f;
-        }
-        for (ConsumeItems consumeItems : block.consumers) {
-            if (consumeItems instanceof ConsumeItems) {
-                for (ItemStack itemStack : consumeItems.items) {
-                    if (itemStack.item == item) {
-                        return r0.amount;
-                    }
-                }
-            }
-        }
-        return 0.0f;
-    }
-
-    private static String fmt(float f) {
-        return String.valueOf(Math.round(f * 10.0f) / 10.0f);
-    }
+    StringBuilder stringBuilder = new StringBuilder();
+    float f = 0.0F;
+    for (byte b2 = 0; b2 < seq2.size; b2++) {
+      f += objectFloatMap1.get(seq2.get(b2), 0.0F);
+      if (b2 < 2) {
+        if (stringBuilder.length() > 0)
+          stringBuilder.append(", "); 
+        stringBuilder.append(((Block)seq2.get(b2)).localizedName).append(" x").append(objectIntMap.get(seq2.get(b2), 0));
+      } 
+    } 
+    if (f < paramFloat * 0.6F)
+      stringBuilder.append(", ").append(LunariansI18n.get("loss_other")); 
+    return stringBuilder.toString();
+  }
+  
+  private static float amountPerCraft(Block paramBlock, Item paramItem) {
+    if (paramBlock.consumers == null)
+      return 0.0F; 
+    for (Consume consume : paramBlock.consumers) {
+      if (consume instanceof ConsumeItems) {
+        ItemStack[] arrayOfItemStack;
+        int i;
+        byte b;
+        for (arrayOfItemStack = ((ConsumeItems)consume).items, i = arrayOfItemStack.length, b = 0; b < i; ) {
+          ItemStack itemStack = arrayOfItemStack[b];
+          if (itemStack.item != paramItem) {
+            b++;
+            continue;
+          } 
+          return itemStack.amount;
+        } 
+      } 
+    } 
+    return 0.0F;
+  }
+  
+  private static String fmt(float paramFloat) {
+    return String.valueOf(Math.round(paramFloat * 10.0F) / 10.0F);
+  }
 }

@@ -3,6 +3,7 @@ package lunarians;
 import arc.Events;
 import arc.func.Cons;
 import arc.math.Mathf;
+import arc.math.geom.Position;
 import arc.math.geom.Vec2;
 import arc.struct.IntFloatMap;
 import arc.struct.IntSeq;
@@ -21,271 +22,274 @@ import mindustry.gen.Call;
 import mindustry.gen.Groups;
 import mindustry.gen.Unit;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/AutoMoon.class */
 public class AutoMoon {
-    private static final float SCAN = 0.55f;
-    private static final float ATTACK_RANGE_PAD = 1.15f;
-    private static float timer;
-    private static int count;
-    private static boolean errorLogged;
-    private static final IntSet claimed = new IntSet();
-    private static final IntFloatMap angles = new IntFloatMap();
-
-    public static void init() {
-        if (Vars.headless) {
-            return;
-        }
-        Events.run(EventType.Trigger.update, new Runnable() { // from class: lunarians.AutoMoon.1
-            @Override // java.lang.Runnable
-            public void run() {
-                AutoMoon.update();
-            }
+  private static final float SCAN = 0.55F;
+  
+  private static final float ATTACK_RANGE_PAD = 1.15F;
+  
+  private static float timer;
+  
+  private static int count;
+  
+  private static boolean errorLogged;
+  
+  private static final IntSet claimed = new IntSet();
+  
+  private static final IntFloatMap angles = new IntFloatMap();
+  
+  public static void init() {
+    if (Vars.headless)
+      return; 
+    Events.run(EventType.Trigger.update, new Runnable() {
+          public void run() {
+            AutoMoon.update();
+          }
         });
-        Events.on(EventType.WorldLoadEvent.class, new Cons<EventType.WorldLoadEvent>() { // from class: lunarians.AutoMoon.2
-            public void get(EventType.WorldLoadEvent worldLoadEvent) {
-                AutoMoon.reset();
-            }
+    Events.on(EventType.WorldLoadEvent.class, new Cons<EventType.WorldLoadEvent>() {
+          public void get(EventType.WorldLoadEvent param1WorldLoadEvent) {
+            AutoMoon.reset();
+          }
         });
-    }
-
-    public static void reset() {
-        timer = 0.0f;
-        count = 0;
-        claimed.clear();
-        angles.clear();
-    }
-
-    public static int count() {
-        return count;
-    }
-
-    private static void update() {
-        if (!LunariansSettings.enableAutoMoon || Vars.state == null || !Vars.state.isGame() || Vars.player == null) {
-            return;
-        }
-        timer += Time.delta / 60.0f;
-        if (timer < LunariansSettings.actionInterval(SCAN)) {
-            return;
-        }
-        float f = timer;
-        timer = 0.0f;
-        try {
-            scan(f);
-        } catch (Throwable th) {
-            if (!errorLogged) {
-                errorLogged = true;
-                Log.err("[Lunarians] AutoMoon error", th);
-            }
-        }
-    }
-
-    private static boolean isConstructing(Unit unit) {
-        if (unit == null || !unit.isValid()) {
-            return false;
-        }
-        try {
-            if (unit.activelyBuilding() || unit.isBuilding()) {
-                return true;
-            }
-            if (unit.plans != null) {
-                return unit.plans.size > 0;
-            }
-            return false;
-        } catch (Throwable th) {
-            return false;
-        }
-    }
-
-    private static BuildPlan currentPlan(Unit unit) {
-        if (unit == null) {
-            return null;
-        }
-        try {
-            BuildPlan buildPlan = unit.buildPlan();
-            if (buildPlan != null) {
-                return buildPlan;
-            }
-            if (unit.plans == null || unit.plans.size <= 0) {
-                return null;
-            }
-            return (BuildPlan) unit.plans.first();
-        } catch (Throwable th) {
-            return null;
-        }
-    }
-
-    private static void resolveCenter(MoonSlot moonSlot, float[] fArr) {
-        Unit byID;
-        if (moonSlot.hasUnitCenter() && (byID = Groups.unit.getByID(moonSlot.followId)) != null && byID.isValid()) {
-            fArr[0] = byID.x;
-            fArr[1] = byID.y;
-            return;
-        }
-        if (moonSlot.hasTileCenter()) {
-            fArr[0] = (moonSlot.x * 8.0f) + 4.0f;
-            fArr[1] = (moonSlot.y * 8.0f) + 4.0f;
-        } else if (Vars.player.unit() != null && Vars.player.unit().isValid()) {
-            fArr[0] = Vars.player.unit().x;
-            fArr[1] = Vars.player.unit().y;
-        } else {
-            fArr[0] = Vars.player.x;
-            fArr[1] = Vars.player.y;
-        }
-    }
-
-    private static Unit findBuildingHost(MoonSlot moonSlot) {
-        if (moonSlot.hasUnitCenter()) {
-            Unit byID = Groups.unit.getByID(moonSlot.followId);
-            if (isConstructing(byID)) {
-                return byID;
-            }
-        }
-        Unit unit = Vars.player.unit();
-        if (isConstructing(unit)) {
-            return unit;
-        }
-        return null;
-    }
-
-    private static void scan(float f) {
-        Seq<MoonSlot> seq = LunariansSettings.moonSlots;
-        if (seq.isEmpty()) {
-            return;
-        }
-        claimed.clear();
-        count = 0;
-        int size = Groups.unit.size();
-        float[] fArr = new float[2];
-        for (int i = 0; i < seq.size; i++) {
-            MoonSlot moonSlot = (MoonSlot) seq.get(i);
-            if (moonSlot.ready()) {
-                resolveCenter(moonSlot, fArr);
-                float f2 = fArr[0];
-                float f3 = fArr[1];
-                float f4 = moonSlot.radius * 8.0f;
-                float max = Math.max(0.25f, Math.min(4.0f, moonSlot.speed));
-                Seq seq2 = new Seq();
-                for (int i2 = 0; i2 < size; i2++) {
-                    Unit index = Groups.unit.index(i2);
-                    if (index != null && index.isValid() && index.team == Vars.player.team() && !claimed.contains(index.id) && ((!moonSlot.hasUnitCenter() || index.id != moonSlot.followId) && !AutoUnitHeal.isActiveHealer(index.id) && (index.controller() instanceof CommandAI) && index.isFlying() && moonSlot.unit.equals(index.type.name))) {
-                        seq2.add(index);
-                    }
-                }
-                if (moonSlot.maxUnits > 0 && seq2.size > moonSlot.maxUnits) {
-                    seq2.truncate(moonSlot.maxUnits);
-                }
-                for (int i3 = 0; i3 < seq2.size; i3++) {
-                    claimed.add(((Unit) seq2.get(i3)).id);
-                }
-                if (!seq2.isEmpty()) {
-                    Unit findBuildingHost = findBuildingHost(moonSlot);
-                    if (findBuildingHost != null) {
-                        assistBuild(seq2, findBuildingHost);
-                        count += seq2.size;
-                    } else {
-                        float max2 = Math.max(0.25f, 2.2f / Math.max(1.0f, moonSlot.radius)) * f * max;
-                        for (int i4 = 0; i4 < seq2.size; i4++) {
-                            Unit unit = (Unit) seq2.get(i4);
-                            float max3 = f4 + (Math.max(24.0f, unit.type.maxRange) * ATTACK_RANGE_PAD);
-                            Unit nearestEnemy = nearestEnemy(unit, f2, f3, max3);
-                            Building nearestEnemyBuild = nearestEnemy == null ? nearestEnemyBuild(unit, f2, f3, max3) : null;
-                            if (unit.controller().command != UnitCommand.moveCommand) {
-                                Call.setUnitCommand(Vars.player, new int[]{unit.id}, UnitCommand.moveCommand);
-                            }
-                            if (nearestEnemy != null) {
-                                float max4 = Math.max(24.0f, unit.type.maxRange) * 0.9f;
-                                float angleTo = nearestEnemy.angleTo(unit) * 0.017453292f;
-                                Call.commandUnits(Vars.player, new int[]{unit.id}, (Building) null, nearestEnemy, new Vec2(nearestEnemy.x + (Mathf.cos(angleTo) * max4), nearestEnemy.y + (Mathf.sin(angleTo) * max4)), false, true);
-                                count++;
-                            } else if (nearestEnemyBuild != null) {
-                                float max5 = Math.max(24.0f, unit.type.maxRange) * 0.9f;
-                                float angleTo2 = nearestEnemyBuild.angleTo(unit) * 0.017453292f;
-                                Call.commandUnits(Vars.player, new int[]{unit.id}, nearestEnemyBuild, (Unit) null, new Vec2(nearestEnemyBuild.x + (Mathf.cos(angleTo2) * max5), nearestEnemyBuild.y + (Mathf.sin(angleTo2) * max5)), false, true);
-                                count++;
-                            } else {
-                                float f5 = angles.get(unit.id, i4 * (6.2831855f / Math.max(1, seq2.size))) + max2;
-                                if (f5 > 6.2831855f) {
-                                    f5 -= 6.2831855f;
-                                }
-                                angles.put(unit.id, f5);
-                                Call.commandUnits(Vars.player, new int[]{unit.id}, (Building) null, (Unit) null, new Vec2(f2 + (Mathf.cos(f5) * f4), f3 + (Mathf.sin(f5) * f4)), false, true);
-                                count++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private static void assistBuild(Seq<Unit> seq, Unit unit) {
-        BuildPlan currentPlan = currentPlan(unit);
-        float f = unit.x;
-        float f2 = unit.y;
-        if (currentPlan != null) {
-            try {
-                f = (currentPlan.x * 8.0f) + 4.0f;
-                f2 = (currentPlan.y * 8.0f) + 4.0f;
-            } catch (Throwable th) {
-                f = unit.x;
-                f2 = unit.y;
-            }
-        }
-        IntSeq intSeq = new IntSeq();
-        IntSeq intSeq2 = new IntSeq();
-        for (int i = 0; i < seq.size; i++) {
-            Unit unit2 = (Unit) seq.get(i);
-            if (unit2.type == null || unit2.type.buildSpeed <= 0.0f) {
-                intSeq2.add(unit2.id);
-            } else {
-                intSeq.add(unit2.id);
-            }
-        }
-        if (intSeq.size > 0) {
-            Call.setUnitCommand(Vars.player, intSeq.toArray(), UnitCommand.assistCommand);
-        }
-        for (int i2 = 0; i2 < seq.size; i2++) {
-            Unit unit3 = (Unit) seq.get(i2);
-            float max = Math.max(24.0f, unit3.type != null ? unit3.type.buildRange : 40.0f) * 0.7f;
-            float max2 = ((i2 * 360.0f) / Math.max(1, seq.size)) * 0.017453292f;
-            Call.commandUnits(Vars.player, new int[]{unit3.id}, (Building) null, (Unit) null, new Vec2(f + (Mathf.cos(max2) * Math.min(18.0f, max * 0.3f)), f2 + (Mathf.sin(max2) * Math.min(18.0f, max * 0.3f))), false, true);
-        }
-    }
-
-    private static Unit nearestEnemy(Unit unit, float f, float f2, float f3) {
-        Unit unit2 = null;
-        float f4 = f3;
-        int size = Groups.unit.size();
-        for (int i = 0; i < size; i++) {
-            Unit unit3 = (Unit) Groups.unit.index(i);
-            if (unit3 != null && unit3.isValid() && unit3.team != unit.team && Mathf.dst(f, f2, unit3.x, unit3.y) <= f3) {
-                float dst = unit.dst(unit3);
-                if (dst < f4) {
-                    f4 = dst;
-                    unit2 = unit3;
-                }
-            }
-        }
-        return unit2;
-    }
-
-    private static Building nearestEnemyBuild(Unit unit, float f, float f2, float f3) {
-        Building building = null;
-        float f4 = f3;
-        int size = Groups.build.size();
-        for (int i = 0; i < size; i++) {
-            Building building2 = (Building) Groups.build.index(i);
-            if (building2 != null && building2.isValid() && building2.team != unit.team && Mathf.dst(f, f2, building2.x, building2.y) <= f3) {
-                float dst = unit.dst(building2);
-                if (dst < f4) {
-                    f4 = dst;
-                    building = building2;
-                }
-            }
-        }
-        return building;
-    }
+  }
+  
+  public static void reset() {
+    timer = 0.0F;
+    count = 0;
+    claimed.clear();
+    angles.clear();
+  }
+  
+  public static int count() {
+    return count;
+  }
+  
+  private static void update() {
+    if (!LunariansSettings.enableAutoMoon || Vars.state == null || !Vars.state.isGame() || Vars.player == null)
+      return; 
+    timer += Time.delta / 60.0F;
+    if (timer < LunariansSettings.actionInterval(0.55F))
+      return; 
+    float f = timer;
+    timer = 0.0F;
+    try {
+      scan(f);
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] AutoMoon error", throwable);
+      } 
+    } 
+  }
+  
+  private static boolean isConstructing(Unit paramUnit) {
+    if (paramUnit == null || !paramUnit.isValid())
+      return false; 
+    try {
+      if (paramUnit.activelyBuilding())
+        return true; 
+      if (paramUnit.isBuilding())
+        return true; 
+      if (paramUnit.plans != null && paramUnit.plans.size > 0)
+        return true; 
+    } catch (Throwable throwable) {}
+    return false;
+  }
+  
+  private static BuildPlan currentPlan(Unit paramUnit) {
+    if (paramUnit == null)
+      return null; 
+    try {
+      BuildPlan buildPlan = paramUnit.buildPlan();
+      if (buildPlan != null)
+        return buildPlan; 
+      if (paramUnit.plans != null && paramUnit.plans.size > 0)
+        return (BuildPlan)paramUnit.plans.first(); 
+    } catch (Throwable throwable) {}
+    return null;
+  }
+  
+  private static void resolveCenter(MoonSlot paramMoonSlot, float[] paramArrayOffloat) {
+    if (paramMoonSlot.hasUnitCenter()) {
+      Unit unit = (Unit)Groups.unit.getByID(paramMoonSlot.followId);
+      if (unit != null && unit.isValid()) {
+        paramArrayOffloat[0] = unit.x;
+        paramArrayOffloat[1] = unit.y;
+        return;
+      } 
+    } 
+    if (paramMoonSlot.hasTileCenter()) {
+      paramArrayOffloat[0] = paramMoonSlot.x * 8.0F + 4.0F;
+      paramArrayOffloat[1] = paramMoonSlot.y * 8.0F + 4.0F;
+      return;
+    } 
+    if (Vars.player.unit() != null && Vars.player.unit().isValid()) {
+      paramArrayOffloat[0] = (Vars.player.unit()).x;
+      paramArrayOffloat[1] = (Vars.player.unit()).y;
+    } else {
+      paramArrayOffloat[0] = Vars.player.x;
+      paramArrayOffloat[1] = Vars.player.y;
+    } 
+  }
+  
+  private static Unit findBuildingHost(MoonSlot paramMoonSlot) {
+    if (paramMoonSlot.hasUnitCenter()) {
+      Unit unit1 = (Unit)Groups.unit.getByID(paramMoonSlot.followId);
+      if (isConstructing(unit1))
+        return unit1; 
+    } 
+    Unit unit = Vars.player.unit();
+    if (isConstructing(unit))
+      return unit; 
+    return null;
+  }
+  
+  private static void scan(float paramFloat) {
+    Seq<MoonSlot> seq = LunariansSettings.moonSlots;
+    if (seq.isEmpty())
+      return; 
+    claimed.clear();
+    count = 0;
+    int i = Groups.unit.size();
+    float[] arrayOfFloat = new float[2];
+    for (byte b = 0; b < seq.size; b++) {
+      MoonSlot moonSlot = (MoonSlot)seq.get(b);
+      if (moonSlot.ready()) {
+        resolveCenter(moonSlot, arrayOfFloat);
+        float f1 = arrayOfFloat[0], f2 = arrayOfFloat[1];
+        float f3 = moonSlot.radius * 8.0F;
+        float f4 = Math.max(0.25F, Math.min(4.0F, moonSlot.speed));
+        Seq<Unit> seq1 = new Seq();
+        byte b1;
+        for (b1 = 0; b1 < i; b1++) {
+          Unit unit = (Unit)Groups.unit.index(b1);
+          if (unit != null && unit.isValid() && unit.team == Vars.player.team() && 
+            !claimed.contains(unit.id) && (
+            !moonSlot.hasUnitCenter() || unit.id != moonSlot.followId) && 
+            !AutoUnitHeal.isActiveHealer(unit.id) && 
+            unit.controller() instanceof CommandAI && 
+            unit.isFlying() && 
+            moonSlot.unit.equals(unit.type.name))
+            seq1.add(unit); 
+        } 
+        if (moonSlot.maxUnits > 0 && seq1.size > moonSlot.maxUnits)
+          seq1.truncate(moonSlot.maxUnits); 
+        for (b1 = 0; b1 < seq1.size; ) {
+          claimed.add(((Unit)seq1.get(b1)).id);
+          b1++;
+        } 
+        if (!seq1.isEmpty()) {
+          Unit unit = findBuildingHost(moonSlot);
+          if (unit != null) {
+            assistBuild(seq1, unit);
+            count += seq1.size;
+          } else {
+            float f = Math.max(0.25F, 2.2F / Math.max(1.0F, moonSlot.radius)) * paramFloat * f4;
+            for (byte b2 = 0; b2 < seq1.size; b2++) {
+              Unit unit1 = (Unit)seq1.get(b2);
+              float f5 = f3 + Math.max(24.0F, unit1.type.maxRange) * 1.15F;
+              Unit unit2 = nearestEnemy(unit1, f1, f2, f5);
+              Building building = (unit2 == null) ? nearestEnemyBuild(unit1, f1, f2, f5) : null;
+              CommandAI commandAI = (CommandAI)unit1.controller();
+              if (commandAI.command != UnitCommand.moveCommand)
+                Call.setUnitCommand(Vars.player, new int[] { unit1.id }, UnitCommand.moveCommand); 
+              if (unit2 != null) {
+                float f6 = Math.max(24.0F, unit1.type.maxRange) * 0.9F;
+                float f7 = unit2.angleTo((Position)unit1) * 0.017453292F;
+                Call.commandUnits(Vars.player, new int[] { unit1.id }, null, unit2, new Vec2(unit2.x + 
+                      Mathf.cos(f7) * f6, unit2.y + Mathf.sin(f7) * f6), false, true);
+                count++;
+              } else if (building != null) {
+                float f6 = Math.max(24.0F, unit1.type.maxRange) * 0.9F;
+                float f7 = building.angleTo((Position)unit1) * 0.017453292F;
+                Call.commandUnits(Vars.player, new int[] { unit1.id }, building, null, new Vec2(building.x + 
+                      Mathf.cos(f7) * f6, building.y + Mathf.sin(f7) * f6), false, true);
+                count++;
+              } else {
+                float f6 = angles.get(unit1.id, b2 * 6.2831855F / Math.max(1, seq1.size));
+                f6 += f;
+                if (f6 > 6.2831855F)
+                  f6 -= 6.2831855F; 
+                angles.put(unit1.id, f6);
+                Call.commandUnits(Vars.player, new int[] { unit1.id }, null, null, new Vec2(f1 + 
+                      Mathf.cos(f6) * f3, f2 + Mathf.sin(f6) * f3), false, true);
+                count++;
+              } 
+            } 
+          } 
+        } 
+      } 
+    } 
+  }
+  
+  private static void assistBuild(Seq<Unit> paramSeq, Unit paramUnit) {
+    BuildPlan buildPlan = currentPlan(paramUnit);
+    float f1 = paramUnit.x, f2 = paramUnit.y;
+    if (buildPlan != null)
+      try {
+        f1 = buildPlan.x * 8.0F + 4.0F;
+        f2 = buildPlan.y * 8.0F + 4.0F;
+      } catch (Throwable throwable) {
+        f1 = paramUnit.x;
+        f2 = paramUnit.y;
+      }  
+    IntSeq intSeq1 = new IntSeq();
+    IntSeq intSeq2 = new IntSeq();
+    byte b;
+    for (b = 0; b < paramSeq.size; b++) {
+      Unit unit = (Unit)paramSeq.get(b);
+      if (unit.type == null || unit.type.buildSpeed <= 0.0F) {
+        intSeq2.add(unit.id);
+      } else {
+        intSeq1.add(unit.id);
+      } 
+    } 
+    if (intSeq1.size > 0) {
+      UnitCommand unitCommand = UnitCommand.assistCommand;
+      Call.setUnitCommand(Vars.player, intSeq1.toArray(), unitCommand);
+    } 
+    for (b = 0; b < paramSeq.size; b++) {
+      Unit unit = (Unit)paramSeq.get(b);
+      float f3 = Math.max(24.0F, (unit.type != null) ? unit.type.buildRange : 40.0F) * 0.7F;
+      float f4 = b * 360.0F / Math.max(1, paramSeq.size) * 0.017453292F;
+      float f5 = Mathf.cos(f4) * Math.min(18.0F, f3 * 0.3F);
+      float f6 = Mathf.sin(f4) * Math.min(18.0F, f3 * 0.3F);
+      Call.commandUnits(Vars.player, new int[] { unit.id }, null, null, new Vec2(f1 + f5, f2 + f6), false, true);
+    } 
+  }
+  
+  private static Unit nearestEnemy(Unit paramUnit, float paramFloat1, float paramFloat2, float paramFloat3) {
+    Unit unit = null;
+    float f = paramFloat3;
+    int i = Groups.unit.size();
+    for (byte b = 0; b < i; b++) {
+      Unit unit1 = (Unit)Groups.unit.index(b);
+      if (unit1 != null && unit1.isValid() && unit1.team != paramUnit.team && 
+        Mathf.dst(paramFloat1, paramFloat2, unit1.x, unit1.y) <= paramFloat3) {
+        float f1 = paramUnit.dst((Position)unit1);
+        if (f1 < f) {
+          f = f1;
+          unit = unit1;
+        } 
+      } 
+    } 
+    return unit;
+  }
+  
+  private static Building nearestEnemyBuild(Unit paramUnit, float paramFloat1, float paramFloat2, float paramFloat3) {
+    Building building = null;
+    float f = paramFloat3;
+    int i = Groups.build.size();
+    for (byte b = 0; b < i; b++) {
+      Building building1 = (Building)Groups.build.index(b);
+      if (building1 != null && building1.isValid() && building1.team != paramUnit.team && 
+        Mathf.dst(paramFloat1, paramFloat2, building1.x, building1.y) <= paramFloat3) {
+        float f1 = paramUnit.dst((Position)building1);
+        if (f1 < f) {
+          f = f1;
+          building = building1;
+        } 
+      } 
+    } 
+    return building;
+  }
 }

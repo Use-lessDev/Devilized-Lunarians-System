@@ -2,10 +2,13 @@ package lunarians.ui;
 
 import arc.Core;
 import arc.graphics.Color;
+import arc.graphics.g2d.TextureAtlas;
 import arc.graphics.g2d.TextureRegion;
 import arc.input.KeyCode;
 import arc.scene.event.ClickListener;
+import arc.scene.event.EventListener;
 import arc.scene.event.InputEvent;
+import arc.scene.style.Drawable;
 import arc.scene.ui.ImageButton;
 import arc.util.Log;
 import arc.util.Time;
@@ -21,166 +24,155 @@ import mindustry.gen.Tex;
 import mindustry.ui.Styles;
 import mindustry.world.Block;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/ui/SlotButton.class */
 public class SlotButton extends ImageButton {
-    private SlotData data;
-    private float holdTime;
-    private boolean holding;
-    private boolean dirty;
-    private final int index;
-    private static ImageButton.ImageButtonStyle style;
-
-    private static ImageButton.ImageButtonStyle selectStyle() {
-        if (style == null) {
-            style = new ImageButton.ImageButtonStyle(Styles.defaulti);
-            style.checked = Tex.buttonSelect;
-            style.checkedOver = Tex.buttonSelect;
-        }
-        return style;
-    }
-
-    public void setChecked(boolean z) {
-        super.setChecked(SchematicPlacer.isSelected(this));
-    }
-
-    public SlotButton(int i) {
-        super(selectStyle());
-        this.data = new SlotData();
-        this.holdTime = 0.0f;
-        this.holding = false;
-        this.dirty = true;
-        this.index = i;
-        setSize(48.0f);
-        updateVisual();
-        addListener(new ClickListener() { // from class: lunarians.ui.SlotButton.1
-            public boolean touchDown(InputEvent inputEvent, float f, float f2, int i2, KeyCode keyCode) {
-                if (keyCode == KeyCode.mouseLeft) {
-                    SlotButton.this.holding = true;
-                    SlotButton.this.holdTime = 0.0f;
-                    return true;
-                }
-                return false;
-            }
-
-            public void touchUp(InputEvent inputEvent, float f, float f2, int i2, KeyCode keyCode) {
-                if (SlotButton.this.holding) {
-                    SlotButton.this.holding = false;
-                    SlotButton.this.dirty = true;
-                    if (SlotButton.this.holdTime >= LunariansSettings.holdSeconds) {
-                        SlotButton.this.clearSlot();
-                    } else {
-                        SlotButton.this.onClick();
-                    }
-                }
-            }
+  private SlotData data = new SlotData();
+  
+  private float holdTime = 0.0F;
+  
+  private boolean holding = false;
+  
+  private boolean dirty = true;
+  
+  private final int index;
+  
+  private static ImageButton.ImageButtonStyle style;
+  
+  private static ImageButton.ImageButtonStyle selectStyle() {
+    if (style == null) {
+      style = new ImageButton.ImageButtonStyle(Styles.defaulti);
+      style.checked = Tex.buttonSelect;
+      style.checkedOver = Tex.buttonSelect;
+    } 
+    return style;
+  }
+  
+  public void setChecked(boolean paramBoolean) {
+    super.setChecked(SchematicPlacer.isSelected(this));
+  }
+  
+  public SlotButton(int paramInt) {
+    super(selectStyle());
+    this.index = paramInt;
+    setSize(48.0F);
+    updateVisual();
+    addListener((EventListener)new ClickListener() {
+          public boolean touchDown(InputEvent param1InputEvent, float param1Float1, float param1Float2, int param1Int, KeyCode param1KeyCode) {
+            if (param1KeyCode == KeyCode.mouseLeft) {
+              SlotButton.this.holding = true;
+              SlotButton.this.holdTime = 0.0F;
+              return true;
+            } 
+            return false;
+          }
+          
+          public void touchUp(InputEvent param1InputEvent, float param1Float1, float param1Float2, int param1Int, KeyCode param1KeyCode) {
+            if (SlotButton.this.holding) {
+              SlotButton.this.holding = false;
+              SlotButton.this.dirty = true;
+              if (SlotButton.this.holdTime >= LunariansSettings.holdSeconds) {
+                SlotButton.this.clearSlot();
+              } else {
+                SlotButton.this.onClick();
+              } 
+            } 
+          }
         });
-        update(new Runnable() { // from class: lunarians.ui.SlotButton.2
-            @Override // java.lang.Runnable
-            public final void run() {
-                SlotButton.this.lam_new$0();
-            }
+    update(new Runnable() {
+          public final void run() {
+            SlotButton.this.lam_new$0();
+          }
         });
-    }
-
-    public void lam_new$0() {
-        if (this.holding) {
-            this.holdTime += Time.delta / 60.0f;
-            if (this.holdTime >= LunariansSettings.holdSeconds * 0.7f) {
-                setColor(Color.red.cpy().lerp(Color.white, 1.0f - (this.holdTime / LunariansSettings.holdSeconds)));
-                return;
-            }
-            return;
-        }
-        boolean isSelected = SchematicPlacer.isSelected(this);
-        if (isChecked() != isSelected) {
-            setChecked(isSelected);
-        }
-        if (this.dirty) {
-            this.dirty = false;
-            setColor(Color.white);
-        }
-    }
-
-    public void onClick() {
-        if (this.data.hasSchematic()) {
-            placeSchematic();
+  }
+  
+  public void lam_new$0() {
+    if (this.holding) {
+      this.holdTime += Time.delta / 60.0F;
+      if (this.holdTime >= LunariansSettings.holdSeconds * 0.7F)
+        setColor(Color.red.cpy().lerp(Color.white, 1.0F - this.holdTime / LunariansSettings.holdSeconds)); 
+      return;
+    } 
+    boolean bool = SchematicPlacer.isSelected(this);
+    if (isChecked() != bool)
+      setChecked(bool); 
+    if (this.dirty) {
+      this.dirty = false;
+      setColor(Color.white);
+    } 
+  }
+  
+  public void onClick() {
+    if (this.data.hasSchematic()) {
+      placeSchematic();
+    } else {
+      (new SchematicInputDialog(this)).show();
+    } 
+  }
+  
+  private void placeSchematic() {
+    if (SchematicPlacer.isSelected(this)) {
+      SchematicPlacer.deselect();
+      return;
+    } 
+    try {
+      Schematic schematic = Schematics.readBase64(this.data.schematicBase64);
+      if (schematic != null)
+        SchematicPlacer.select(this, schematic); 
+    } catch (Exception exception) {
+      Vars.ui.showErrorMessage("Schematic inválida:\n" + exception.getMessage());
+      Log.err(exception);
+    } 
+  }
+  
+  public void setData(SlotData paramSlotData) {
+    setData(paramSlotData, true);
+  }
+  
+  public void setData(SlotData paramSlotData, boolean paramBoolean) {
+    this.data = paramSlotData;
+    updateVisual();
+    if (paramBoolean && LunariansMod.panel != null)
+      LunariansMod.panel.saveSlot(this.index, this.data); 
+  }
+  
+  public void clearSlot() {
+    if (SchematicPlacer.isSelected(this))
+      SchematicPlacer.deselect(); 
+    this.data.clear();
+    updateVisual();
+    if (LunariansMod.panel != null)
+      LunariansMod.panel.saveSlot(this.index, this.data); 
+  }
+  
+  private static float iconSize() {
+    return Math.max(20.0F, LunariansSettings.slotSize * 0.6F);
+  }
+  
+  private void updateVisual() {
+    clearChildren();
+    if (this.data.hasSchematic()) {
+      TextureAtlas.AtlasRegion atlasRegion;
+      TextureRegion textureRegion = Icon.file.getRegion();
+      if (this.data.iconName != null && !this.data.iconName.isEmpty()) {
+        Block block = Vars.content.block(this.data.iconName);
+        if (block != null && block.uiIcon != null && block.uiIcon.found()) {
+          textureRegion = block.uiIcon;
         } else {
-            new SchematicInputDialog(this).show();
-        }
-    }
-
-    private void placeSchematic() {
-        if (SchematicPlacer.isSelected(this)) {
-            SchematicPlacer.deselect();
-            return;
-        }
-        try {
-            Schematic readBase64 = Schematics.readBase64(this.data.schematicBase64);
-            if (readBase64 != null) {
-                SchematicPlacer.select(this, readBase64);
-            }
-        } catch (Exception e) {
-            Vars.ui.showErrorMessage("Schematic inválida:\n" + e.getMessage());
-            Log.err(e);
-        }
-    }
-
-    public void setData(SlotData slotData) {
-        setData(slotData, true);
-    }
-
-    public void setData(SlotData slotData, boolean z) {
-        this.data = slotData;
-        updateVisual();
-        if (z && LunariansMod.panel != null) {
-            LunariansMod.panel.saveSlot(this.index, this.data);
-        }
-    }
-
-    public void clearSlot() {
-        if (SchematicPlacer.isSelected(this)) {
-            SchematicPlacer.deselect();
-        }
-        this.data.clear();
-        updateVisual();
-        if (LunariansMod.panel != null) {
-            LunariansMod.panel.saveSlot(this.index, this.data);
-        }
-    }
-
-    private static float iconSize() {
-        return Math.max(20.0f, LunariansSettings.slotSize * 0.6f);
-    }
-
-    private void updateVisual() {
-        clearChildren();
-        if (this.data.hasSchematic()) {
-            TextureRegion region = Icon.file.getRegion();
-            if (this.data.iconName != null && !this.data.iconName.isEmpty()) {
-                Block block = Vars.content.block(this.data.iconName);
-                if (block != null && block.uiIcon != null && block.uiIcon.found()) {
-                    region = block.uiIcon;
-                } else {
-                    TextureRegion find = Core.atlas.find(this.data.iconName);
-                    if (find != null && find.found()) {
-                        region = find;
-                    }
-                }
-            }
-            image(region).size(iconSize());
-            return;
-        }
-        image(Icon.add).size(iconSize() * 0.85f).color(Color.lightGray);
-    }
-
-    public SlotData getData() {
-        return this.data;
-    }
-
-    public int getIndex() {
-        return this.index;
-    }
+          TextureAtlas.AtlasRegion atlasRegion1 = Core.atlas.find(this.data.iconName);
+          if (atlasRegion1 != null && atlasRegion1.found())
+            atlasRegion = atlasRegion1; 
+        } 
+      } 
+      image((TextureRegion)atlasRegion).size(iconSize());
+      return;
+    } 
+    image((Drawable)Icon.add).size(iconSize() * 0.85F).color(Color.lightGray);
+  }
+  
+  public SlotData getData() {
+    return this.data;
+  }
+  
+  public int getIndex() {
+    return this.index;
+  }
 }

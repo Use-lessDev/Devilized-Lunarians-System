@@ -2,9 +2,9 @@ package lunarians;
 
 import arc.Core;
 import arc.Events;
-import arc.func.Cons;
 import arc.math.Mathf;
 import arc.math.geom.Point2;
+import arc.math.geom.Position;
 import arc.struct.ObjectSet;
 import arc.struct.Seq;
 import arc.util.Log;
@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.function.BiFunction;
 import mindustry.Vars;
 import mindustry.content.Blocks;
 import mindustry.content.Items;
@@ -32,1136 +31,984 @@ import mindustry.type.ItemStack;
 import mindustry.world.Block;
 import mindustry.world.Build;
 import mindustry.world.Tile;
-import mindustry.world.blocks.distribution.Conveyor;
 import mindustry.world.blocks.power.PowerGenerator;
 import mindustry.world.blocks.power.PowerGraph;
-import mindustry.world.blocks.production.Drill;
 import mindustry.world.blocks.storage.CoreBlock;
 import mindustry.world.blocks.storage.StorageBlock;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/AutoDock.class */
 public class AutoDock {
-    private static float centerX;
-    private static float centerY;
-    private static float phaseStart;
-    private static float nextCheck;
-    static final String[][] ORDER = {new String[]{"Field", "GP!3|GP!4|GP!2", "", "F", "coal"}, new String[]{"Field", "DrM!2|DrM!1|DrM!3", "", "F", "copper"}, new String[]{"Field", "DrM!3|DrM!4|DrM!1", "", "F", "lead"}, new String[]{"Early", "SP_GP10|GP!9", "coal:100"}, new String[]{"Early", "SP_SS23|SS24", "coal:100;sand:200"}, new String[]{"Early", "K17|K!2", "lead:200;sand:100"}, new String[]{"Medium", "PM!9", "coal:100;lead:100;sand:100"}, new String[]{"Medium", "MP17", "coal:300"}, new String[]{"Medium", "T2!4|T2!6", "silicon:300;graphite:100;lead:200;titanium:75", "U"}, new String[]{"Late", "PDG!3", "pyratite:100;titanium:100;coal:100;lead:100;sand:100"}, new String[]{"Late", "SP_PW16", "thorium:100;sand:300"}, new String[]{"Late", "PC17DS", "titanium:300;sand:300"}, new String[]{"Late", "SP_SC21", "coal:200;sand:300;lead:100"}, new String[]{"Late", "T3!3", "silicon:800;titanium:500;metaglass:200;graphite:300"}, new String[]{"End", "SP_SUS4", "copper:300;lead:300;titanium:300;silicon:300"}, new String[]{"End", "SP_T45", "silicon:1500;titanium:1500;metaglass:300;plastanium:300;graphite:300"}};
-    private static int energyFails = 0;
-    private static int energyBuilt = 0;
-    private static boolean unitsOnly = false;
-    private static boolean unitsFinished = false;
-    private static boolean[] done = new boolean[ORDER.length];
-    private static Phase phase = Phase.NEXT;
-    private static int idx = 0;
-    private static Seq<BuildPlan> current = new Seq<>();
-    private static String lastToast = "";
-    private static float lastToastAt = -999.0f;
-    private static boolean energyStep = false;
-    private static int stuckRetries = 0;
-    private static boolean camHeld = false;
-    private static boolean prevDetach = false;
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.AutoDock$0, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass0 implements BiFunction {
-        @Override // java.util.function.BiFunction
-        public final Object apply(Object obj, Object obj2) {
-            return Integer.valueOf(((Integer) obj).intValue() + ((Integer) obj2).intValue());
-        }
-    }
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.AutoDock$2, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass2 implements Cons {
-        public final /* synthetic */ float f$0;
-
-        public final void get(Object obj) {
-            AutoDock.lambda$rotate$1(this.f$0, (Point2) obj);
-        }
-    }
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.AutoDock$3, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass3 implements Cons {
-        public final void get(Object obj) {
-            AutoDock.reset();
-        }
-    }
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.AutoDock$4, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass4 implements Runnable {
-        @Override // java.lang.Runnable
-        public final void run() {
-            AutoDock.$r8$lambda$7__z32isPd_clOmLL6A5K5hyfnQ();
-        }
-    }
-
-    /* JADX WARN: Classes with same name are omitted:
-      classes.dex
-     */
-    /* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/AutoDock$Phase.class */
-    private enum Phase {
-        NEXT,
-        MOVE,
-        BUILD,
-        GRID,
-        DONE
-    }
-
-    public static void startUnits() {
-        unitsOnly = true;
-        unitsFinished = false;
-        phase = Phase.NEXT;
-        nextCheck = 0.0f;
-    }
-
-    public static boolean isUnitsMode() {
-        return unitsOnly;
-    }
-
-    public static boolean unitsDone() {
-        return unitsFinished;
-    }
-
-    public static void stopUnits() {
-        unitsOnly = false;
-        unitsFinished = false;
-        releaseCamera();
-        current = new Seq<>();
-        phase = Phase.NEXT;
-        nextCheck = Time.time + 60.0f;
-    }
-
-    public static void finishEconomy() {
-        unitsOnly = false;
-        unitsFinished = false;
-        phase = Phase.NEXT;
-        nextCheck = Time.time + 60.0f;
-    }
-
-    private static int pick() {
-        for (int i = 0; i < ORDER.length; i++) {
-            if (!done[i] && (!unitsOnly || (ORDER[i].length > 3 && "U".equals(ORDER[i][3])))) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    public static void init() {
-        Events.on(EventType.WorldLoadEvent.class, worldLoadEvent -> {
-            reset();
-        });
-        Events.run(EventType.Trigger.update, AutoDock::update);
-    }
-
-    public static void reset() {
-        releaseCamera();
-        done = new boolean[ORDER.length];
-        unitsOnly = false;
-        unitsFinished = false;
-        phase = Phase.NEXT;
-        idx = 0;
-        current.clear();
-        energyStep = false;
-        energyFails = 0;
-        energyBuilt = 0;
-        stuckRetries = 0;
-        nextCheck = 0.0f;
-    }
-
-    public static String coreInfo() {
-        CoreBlock.CoreBuild closestCore = Vars.player == null ? null : Vars.player.closestCore();
-        if (closestCore == null) {
-            return "sem nucleo";
-        }
-        return closestCore.block.localizedName + " " + closestCore.block.size + "x" + closestCore.block.size + " | capacidade " + closestCore.storageCapacity + " | lados livres: " + freePerimeter(closestCore) + " tiles";
-    }
-
-    private static int freePerimeter(CoreBlock.CoreBuild coreBuild) {
+  static final String[][] ORDER = new String[][] { 
+      { "Field", "GP!3|GP!4|GP!2", "", "F", "coal" }, { "Field", "DrM!2|DrM!1|DrM!3", "", "F", "copper" }, { "Field", "DrM!3|DrM!4|DrM!1", "", "F", "lead" }, { "Early", "SP_GP10|GP!9", "coal:100" }, { "Early", "SP_SS23|SS24", "coal:100;sand:200" }, { "Early", "K17|K!2", "lead:200;sand:100" }, { "Medium", "PM!9", "coal:100;lead:100;sand:100" }, { "Medium", "MP17", "coal:300" }, { "Medium", "T2!4|T2!6", "silicon:300;graphite:100;lead:200;titanium:75", "U" }, { "Late", "PDG!3", "pyratite:100;titanium:100;coal:100;lead:100;sand:100" }, 
+      { "Late", "SP_PW16", "thorium:100;sand:300" }, { "Late", "PC17DS", "titanium:300;sand:300" }, { "Late", "SP_SC21", "coal:200;sand:300;lead:100" }, { "Late", "T3!3", "silicon:800;titanium:500;metaglass:200;graphite:300" }, { "End", "SP_SUS4", "copper:300;lead:300;titanium:300;silicon:300" }, { "End", "SP_T45", "silicon:1500;titanium:1500;metaglass:300;plastanium:300;graphite:300" } };
+  
+  private static int energyFails = 0;
+  
+  private static int energyBuilt = 0;
+  
+  private static boolean unitsOnly = false;
+  
+  private static boolean unitsFinished = false;
+  
+  private static boolean[] done = new boolean[ORDER.length];
+  
+  private static Phase phase = Phase.NEXT;
+  
+  private static int idx = 0;
+  
+  private static Seq<BuildPlan> current = new Seq();
+  
+  private static float centerX;
+  
+  private static float centerY;
+  
+  private static float phaseStart;
+  
+  private static float nextCheck;
+  
+  public static void startUnits() {
+    unitsOnly = true;
+    unitsFinished = false;
+    phase = Phase.NEXT;
+    nextCheck = 0.0F;
+  }
+  
+  public static boolean isUnitsMode() {
+    return unitsOnly;
+  }
+  
+  public static boolean unitsDone() {
+    return unitsFinished;
+  }
+  
+  public static void stopUnits() {
+    unitsOnly = false;
+    unitsFinished = false;
+    releaseCamera();
+    current = new Seq();
+    phase = Phase.NEXT;
+    nextCheck = Time.time + 60.0F;
+  }
+  
+  public static void finishEconomy() {
+    unitsOnly = false;
+    unitsFinished = false;
+    phase = Phase.NEXT;
+    nextCheck = Time.time + 60.0F;
+  }
+  
+  private static int pick() {
+    for (byte b = 0; b < ORDER.length; ) {
+      if (done[b] || (unitsOnly && ((ORDER[b]).length <= 3 || !"U".equals(ORDER[b][3])))) {
+        b++;
+        continue;
+      } 
+      return b;
+    } 
+    return -1;
+  }
+  
+  public static void init() {
+    Events.on(EventType.WorldLoadEvent.class, paramWorldLoadEvent -> reset());
+    Events.run(EventType.Trigger.update, AutoDock::update);
+  }
+  
+  public static void reset() {
+    releaseCamera();
+    done = new boolean[ORDER.length];
+    unitsOnly = false;
+    unitsFinished = false;
+    phase = Phase.NEXT;
+    idx = 0;
+    current.clear();
+    energyStep = false;
+    energyFails = 0;
+    energyBuilt = 0;
+    stuckRetries = 0;
+    nextCheck = 0.0F;
+  }
+  
+  public static String coreInfo() {
+    CoreBlock.CoreBuild coreBuild1 = (Vars.player == null) ? null : Vars.player.closestCore(), coreBuild2 = coreBuild1;
+    if (coreBuild1 == null)
+      return "sem nucleo"; 
+    int i = freePerimeter(coreBuild1);
+    return coreBuild1.block.localizedName + " " + coreBuild1.block.size + "x" + coreBuild1.block.size + " | capacidade " + coreBuild1.storageCapacity + " | lados livres: " + i + " tiles";
+  }
+  
+  private static int freePerimeter(CoreBlock.CoreBuild paramCoreBuild) {
+    byte b = 0;
+    int[] arrayOfInt = rect(paramCoreBuild.tile.x, paramCoreBuild.tile.y, paramCoreBuild.block.size);
+    for (int i = arrayOfInt[0] - 1; i <= arrayOfInt[2] + 1; i++) {
+      for (int j = arrayOfInt[1] - 1; j <= arrayOfInt[3] + 1; j++) {
+        boolean bool1 = (((i >= arrayOfInt[0] && i <= arrayOfInt[2]) ? true : false) != ((j >= arrayOfInt[1] && j <= arrayOfInt[3]) ? true : false)) ? true : false, bool2 = bool1;
         Tile tile;
-        int i = 0;
-        int[] rect = rect(coreBuild.tile.x, coreBuild.tile.y, coreBuild.block.size);
-        int i2 = rect[0] - 1;
-        while (i2 <= rect[2] + 1) {
-            int i3 = rect[1] - 1;
-            while (i3 <= rect[3] + 1) {
-                if (((i2 >= rect[0] && i2 <= rect[2]) != (i3 >= rect[1] && i3 <= rect[3])) && (tile = Vars.world.tile(i2, i3)) != null && tile.build == null && !tile.solid()) {
-                    i++;
-                }
-                i3++;
-            }
-            i2++;
-        }
-        return i;
-    }
-
-    private static void update() {
-        CoreBlock.CoreBuild closestCore;
-        Unit unit;
-        if (!LunariansSettings.dockAuto) {
-            releaseCamera();
-            return;
-        }
-        if (Vars.state == null || !Vars.state.isGame() || Vars.player == null || Vars.player.dead()) {
-            return;
-        }
-        if (((AutoSet.isActive() || AutoEconomy.active) && !unitsOnly) || (closestCore = Vars.player.closestCore()) == null || (unit = Vars.player.unit()) == null || unit.type.buildSpeed <= 0.0f) {
-            return;
-        }
-        try {
-            switch (phase) {
-                case NEXT:
-                    stepNext(closestCore, unit);
-                    break;
-                case MOVE:
-                    stepMove(unit);
-                    break;
-                case BUILD:
-                    stepBuild(unit);
-                    break;
-                case GRID:
-                    stepGrid(closestCore, unit);
-                    break;
-            }
-        } catch (Throwable th) {
-            Log.err("[Lunarians] AutoDock", th);
-            phase = Phase.NEXT;
-            nextCheck = Time.time + 300.0f;
-        }
-    }
-
-    private static boolean unloadersAllowed() {
-        try {
-            return Vars.state.rules.getClass().getField("allowCoreUnloaders").getBoolean(Vars.state.rules);
-        } catch (Throwable th) {
-            return true;
-        }
-    }
-
-    private static void stepNext(CoreBlock.CoreBuild coreBuild, Unit unit) {
-        if (Time.time < nextCheck) {
-            return;
-        }
-        nextCheck = Time.time + 90.0f;
-        if (!unloadersAllowed()) {
-            toast("Auto Dock: este servidor desativou unloaders no nucleo (allowCoreUnloaders). Os schematics encostados nao funcionam aqui.");
-            return;
-        }
-        idx = pick();
-        if (idx < 0) {
-            if (unitsOnly) {
-                unitsFinished = true;
-                return;
-            }
-            toast("Auto Dock: ordem completa.");
-            releaseCamera();
-            phase = Phase.DONE;
-            return;
-        }
-        String[] strArr = ORDER[idx];
-        Schematic find = find(strArr[1]);
-        if (find == null) {
-            toast("Auto Dock: schematic nao encontrado (" + strArr[1] + "), pulando.");
-            done[idx] = true;
-            return;
-        }
-        Seq plans = Vars.schematics.toPlans(find, 0, 0, false);
-        if (plans.size < find.tiles.size) {
-            toast("Auto Dock: " + strArr[1] + " tem blocos bloqueados, pulando.");
-            done[idx] = true;
-            return;
-        }
-        boolean z = strArr.length > 4 && "F".equals(strArr[3]);
-        if (!z && alreadyBuilt(plans, coreBuild)) {
-            done[idx] = true;
-            return;
-        }
-        String missing = missing(coreBuild, plans, strArr[2]);
-        if (missing != null) {
-            toast("Auto Dock [" + strArr[0] + "] " + strArr[1] + ": falta " + missing);
-            return;
-        }
-        if (!Vars.state.rules.infiniteResources) {
-            int i = 0;
-            Iterator it = plans.iterator();
-            while (it.hasNext()) {
-                if (((BuildPlan) it.next()).block == Blocks.unloader) {
-                    i++;
-                }
-            }
-            boolean z2 = strArr.length > 3 && "U".equals(strArr[3]);
-            if (i > 0 || z2) {
-                int i2 = (30 * i) + (z2 ? 150 : 30);
-                int i3 = (25 * i) + (z2 ? 100 : 15);
-                int i4 = coreBuild.items.get(Items.silicon);
-                int i5 = coreBuild.items.get(Items.titanium);
-                if (i4 < i2 || i5 < i3) {
-                    toast("Auto Dock [" + strArr[0] + "] " + strArr[1] + ": esperando silicio " + i4 + "/" + i2 + " e titanio " + i5 + "/" + i3);
-                    return;
-                }
-            }
-        }
-        float powerNeed = powerNeed(plans) * 60.0f;
-        boolean z3 = powerNeed > 0.0f && supplyLeft() < powerNeed * 1.05f;
-        if (!z3) {
-            energyFails = 0;
-        } else if (energyFails >= 2) {
-            toast("Auto Energy: geradores nao produzem (sem carvao no nucleo?). Seguindo sem energia extra.");
-            z3 = false;
-        }
-        if (z3 && energyBuilt >= 3) {
-            toast("Auto Energy: limite de 3 grupos de geradores atingido. Seguindo sem energia extra.");
-            z3 = false;
-        }
-        if (z3) {
-            Seq<BuildPlan> energyCluster = energyCluster(coreBuild);
-            if (energyCluster == null) {
-                toast("Auto Energy: sem espaco para gerador junto ao nucleo.");
-                return;
-            }
-            String missing2 = missing(coreBuild, energyCluster, "coal:300");
-            if (missing2 != null) {
-                toast("Auto Energy: falta " + missing2);
-                return;
-            }
-            toast("Auto Energy: construindo geradores (" + Mathf.round(powerNeed) + " energia/s necessaria).");
-            energyFails++;
-            energyBuilt++;
-            startBuild(energyCluster, true);
-            return;
-        }
-        Seq<BuildPlan> fieldPlan = z ? fieldPlan(coreBuild, plans, strArr[4], unit) : bestDock(coreBuild, plans, unit);
-        if (fieldPlan == null) {
-            toast(z ? "Auto Dock: sem campo de " + strArr[4] + " livre para " + strArr[1] : "Auto Dock: sem lugar encostado no nucleo para " + strArr[1] + " (" + coreInfo() + ")");
-            nextCheck = Time.time + 600.0f;
-            int i6 = stuckRetries + 1;
-            stuckRetries = i6;
-            if (i6 >= 12) {
-                done[idx] = true;
-                stuckRetries = 0;
-                return;
-            }
-            return;
-        }
+        if (bool1 && (tile = Vars.world.tile(i, j)) != null && tile.build == null && !tile.solid())
+          b++; 
+      } 
+    } 
+    return b;
+  }
+  
+  private static void update() {
+    if (!LunariansSettings.dockAuto) {
+      releaseCamera();
+      return;
+    } 
+    if (Vars.state == null || !Vars.state.isGame() || Vars.player == null || Vars.player.dead())
+      return; 
+    if ((AutoSet.isActive() || AutoEconomy.active) && !unitsOnly)
+      return; 
+    CoreBlock.CoreBuild coreBuild = Vars.player.closestCore();
+    if (coreBuild == null)
+      return; 
+    Unit unit = Vars.player.unit();
+    if (unit == null || unit.type.buildSpeed <= 0.0F)
+      return; 
+    try {
+      switch (phase.ordinal()) {
+        case 0:
+          stepNext(coreBuild, unit);
+          break;
+        case 1:
+          stepMove(unit);
+          break;
+        case 2:
+          stepBuild(unit);
+          break;
+        case 3:
+          stepGrid(coreBuild, unit);
+          break;
+      } 
+    } catch (Throwable throwable) {
+      Log.err("[Lunarians] AutoDock", throwable);
+      phase = Phase.NEXT;
+      nextCheck = Time.time + 300.0F;
+    } 
+  }
+  
+  private static boolean unloadersAllowed() {
+    try {
+      return Vars.state.rules.getClass().getField("allowCoreUnloaders").getBoolean(Vars.state.rules);
+    } catch (Throwable throwable) {
+      return true;
+    } 
+  }
+  
+  private static void stepNext(CoreBlock.CoreBuild paramCoreBuild, Unit paramUnit) {
+    if (Time.time < nextCheck)
+      return; 
+    nextCheck = Time.time + 90.0F;
+    if (!unloadersAllowed()) {
+      toast("Auto Dock: este servidor desativou unloaders no nucleo (allowCoreUnloaders). Os schematics encostados nao funcionam aqui.");
+      return;
+    } 
+    idx = pick();
+    if (idx < 0) {
+      if (unitsOnly) {
+        unitsFinished = true;
+        return;
+      } 
+      toast("Auto Dock: ordem completa.");
+      releaseCamera();
+      phase = Phase.DONE;
+      return;
+    } 
+    String[] arrayOfString = ORDER[idx];
+    Schematic schematic = find(arrayOfString[1]);
+    if (schematic == null) {
+      toast("Auto Dock: schematic nao encontrado (" + arrayOfString[1] + "), pulando.");
+      done[idx] = true;
+      return;
+    } 
+    Seq<BuildPlan> seq1 = Vars.schematics.toPlans(schematic, 0, 0, false);
+    if (seq1.size < schematic.tiles.size) {
+      toast("Auto Dock: " + arrayOfString[1] + " tem blocos bloqueados, pulando.");
+      done[idx] = true;
+      return;
+    } 
+    boolean bool1 = (arrayOfString.length > 4 && "F".equals(arrayOfString[3])) ? true : false;
+    if (!bool1 && alreadyBuilt(seq1, paramCoreBuild)) {
+      done[idx] = true;
+      return;
+    } 
+    String str = missing(paramCoreBuild, seq1, arrayOfString[2]);
+    if (str != null) {
+      toast("Auto Dock [" + arrayOfString[0] + "] " + arrayOfString[1] + ": falta " + str);
+      return;
+    } 
+    if (!Vars.state.rules.infiniteResources) {
+      byte b = 0;
+      for (BuildPlan buildPlan : seq1) {
+        if (buildPlan.block == Blocks.unloader)
+          b++; 
+      } 
+      boolean bool = (arrayOfString.length > 3 && "U".equals(arrayOfString[3])) ? true : false;
+      if (b > 0 || bool) {
+        int i = 30 * b + (bool ? 150 : 30);
+        int j = 25 * b + (bool ? 100 : 15);
+        int k = paramCoreBuild.items.get(Items.silicon);
+        int m = paramCoreBuild.items.get(Items.titanium);
+        if (k < i || m < j) {
+          toast("Auto Dock [" + arrayOfString[0] + "] " + arrayOfString[1] + ": esperando silicio " + k + "/" + i + " e titanio " + m + "/" + j);
+          return;
+        } 
+      } 
+    } 
+    float f = powerNeed(seq1) * 60.0F;
+    boolean bool2 = (f > 0.0F && supplyLeft() < f * 1.05F) ? true : false;
+    if (!bool2) {
+      energyFails = 0;
+    } else if (energyFails >= 2) {
+      toast("Auto Energy: geradores nao produzem (sem carvao no nucleo?). Seguindo sem energia extra.");
+      bool2 = false;
+    } 
+    if (bool2 && energyBuilt >= 3) {
+      toast("Auto Energy: limite de 3 grupos de geradores atingido. Seguindo sem energia extra.");
+      bool2 = false;
+    } 
+    if (bool2) {
+      Seq<BuildPlan> seq = energyCluster(paramCoreBuild);
+      if (seq == null) {
+        toast("Auto Energy: sem espaco para gerador junto ao nucleo.");
+        return;
+      } 
+      String str1 = missing(paramCoreBuild, seq, "coal:300");
+      if (str1 != null) {
+        toast("Auto Energy: falta " + str1);
+        return;
+      } 
+      toast("Auto Energy: construindo geradores (" + Mathf.round(f) + " energia/s necessaria).");
+      energyFails++;
+      energyBuilt++;
+      startBuild(seq, true);
+      return;
+    } 
+    Seq<BuildPlan> seq2 = bool1 ? fieldPlan(paramCoreBuild, seq1, arrayOfString[4], paramUnit) : bestDock(paramCoreBuild, seq1, paramUnit);
+    if (seq2 == null) {
+      toast(bool1 ? ("Auto Dock: sem campo de " + arrayOfString[4] + " livre para " + arrayOfString[1]) : ("Auto Dock: sem lugar encostado no nucleo para " + arrayOfString[1] + " (" + coreInfo() + ")"));
+      nextCheck = Time.time + 600.0F;
+      if (++stuckRetries >= 12) {
+        done[idx] = true;
         stuckRetries = 0;
-        toast("Auto Dock [" + strArr[0] + "]: construindo " + strArr[1]);
-        startBuild(fieldPlan, false);
-    }
-
-    private static void startBuild(Seq<BuildPlan> seq, boolean z) {
-        current = seq;
-        energyStep = z;
-        float f = 0.0f;
-        float f2 = 0.0f;
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            f += buildPlan.x;
-            f2 += buildPlan.y;
-        }
-        centerX = (f / seq.size) * 8.0f;
-        centerY = (f2 / seq.size) * 8.0f;
-        phase = Phase.MOVE;
-        phaseStart = Time.time;
-    }
-
-    private static void stepMove(Unit unit) {
-        if (Mathf.dst(unit.x, unit.y, centerX, centerY) <= unit.type.buildRange * 0.6f) {
-            Iterator it = current.iterator();
-            while (it.hasNext()) {
-                BuildPlan buildPlan = (BuildPlan) it.next();
-                if (!isBuilt(buildPlan)) {
-                    unit.addBuild(buildPlan.copy(), true);
-                }
+      } 
+      return;
+    } 
+    stuckRetries = 0;
+    toast("Auto Dock [" + arrayOfString[0] + "]: construindo " + arrayOfString[1]);
+    startBuild(seq2, false);
+  }
+  
+  private static void startBuild(Seq<BuildPlan> paramSeq, boolean paramBoolean) {
+    current = paramSeq;
+    energyStep = paramBoolean;
+    float f1 = 0.0F;
+    float f2 = 0.0F;
+    for (BuildPlan buildPlan : paramSeq) {
+      f1 += buildPlan.x;
+      f2 += buildPlan.y;
+    } 
+    centerX = f1 / paramSeq.size * 8.0F;
+    centerY = f2 / paramSeq.size * 8.0F;
+    phase = Phase.MOVE;
+    phaseStart = Time.time;
+  }
+  
+  private static void stepMove(Unit paramUnit) {
+    float f1 = paramUnit.type.buildRange * 0.6F;
+    float f2 = Mathf.dst(paramUnit.x, paramUnit.y, centerX, centerY);
+    if (f2 <= f1) {
+      for (BuildPlan buildPlan : current) {
+        if (isBuilt(buildPlan))
+          continue; 
+        paramUnit.addBuild(buildPlan.copy(), true);
+      } 
+      phase = Phase.BUILD;
+      phaseStart = Time.time;
+      nextCheck = Time.time + 60.0F;
+      return;
+    } 
+    cameraGo(paramUnit, centerX, centerY);
+    if (Time.time - phaseStart > 2400.0F)
+      abort("nao consegui chegar na obra"); 
+  }
+  
+  private static void cameraGo(Unit paramUnit, float paramFloat1, float paramFloat2) {
+    if (!camHeld) {
+      camHeld = true;
+      prevDetach = Core.settings.getBool("detach-camera", false);
+      Core.camera.position.set(paramUnit.x, paramUnit.y);
+    } 
+    Core.settings.put("detach-camera", Boolean.valueOf(true));
+    float f1 = Core.camera.position.x;
+    float f2 = Core.camera.position.y;
+    float f3 = Mathf.dst(f1, f2, paramFloat1, paramFloat2);
+    if (f3 < 1.0F)
+      return; 
+    float f4 = Math.min(f3, Math.max(2.0F, paramUnit.speed() * 1.25F) * Time.delta);
+    Core.camera.position.set(f1 + (paramFloat1 - f1) / f3 * f4, f2 + (paramFloat2 - f2) / f3 * f4);
+  }
+  
+  private static void releaseCamera() {
+    if (camHeld) {
+      Core.settings.put("detach-camera", Boolean.valueOf(prevDetach));
+      camHeld = false;
+    } 
+  }
+  
+  private static void stepBuild(Unit paramUnit) {
+    cameraGo(paramUnit, centerX, centerY);
+    if (Time.time < nextCheck)
+      return; 
+    nextCheck = Time.time + 60.0F;
+    boolean bool = true;
+    for (BuildPlan buildPlan : current) {
+      if (isBuilt(buildPlan))
+        continue; 
+      bool = false;
+      boolean bool1 = false;
+      for (BuildPlan buildPlan1 : paramUnit.plans()) {
+        if (buildPlan1.x != buildPlan.x || buildPlan1.y != buildPlan.y)
+          continue; 
+        bool1 = true;
+      } 
+      if (bool1 || !Build.validPlace(buildPlan.block, Vars.player.team(), buildPlan.x, buildPlan.y, buildPlan.rotation))
+        continue; 
+      paramUnit.addBuild(buildPlan.copy(), true);
+    } 
+    if (bool) {
+      phase = Phase.GRID;
+      phaseStart = Time.time;
+      nextCheck = Time.time + 30.0F;
+    } else if (Time.time - phaseStart > 9000.0F) {
+      abort("obra travada (recursos acabaram ou area bloqueada)");
+    } 
+  }
+  
+  private static void abort(String paramString) {
+    toast("Auto Dock: " + paramString + ". Tentando de novo depois.");
+    Vars.player.unit().plans().clear();
+    releaseCamera();
+    phase = Phase.NEXT;
+    nextCheck = Time.time + 1200.0F;
+  }
+  
+  private static void stepGrid(CoreBlock.CoreBuild paramCoreBuild, Unit paramUnit) {
+    Building building1;
+    if (Time.time < nextCheck)
+      return; 
+    nextCheck = Time.time + 60.0F;
+    ObjectSet objectSet = new ObjectSet();
+    Seq seq = new Seq();
+    for (BuildPlan buildPlan : current) {
+      Building building = (buildPlan.tile() == null) ? null : (buildPlan.tile()).build;
+      if (building == null || building.power == null)
+        continue; 
+      objectSet.add(building.power.graph);
+      seq.add(building);
+    } 
+    if (seq.isEmpty() || (energyStep && seq.size < 1)) {
+      finishStep();
+      return;
+    } 
+    boolean bool = false;
+    ObjectSet.ObjectSetIterator<PowerGraph> objectSetIterator;
+    for (objectSetIterator = objectSet.iterator(); objectSetIterator.hasNext(); ) {
+      PowerGraph powerGraph = objectSetIterator.next();
+      if (powerGraph.producers.size <= 0)
+        continue; 
+      bool = true;
+    } 
+    objectSetIterator = null;
+    Building building2 = null;
+    float f1 = 1.0E9F;
+    for (Building building : Groups.build) {
+      if (building.team != Vars.player.team() || building.power == null || objectSet.contains(building.power.graph) || (building.power.graph.producers.size == 0 && building.power.graph.batteries.size == 0))
+        continue; 
+      for (Building building3 : seq) {
+        float f = Mathf.dst(building.tileX(), building.tileY(), building3.tileX(), building3.tileY());
+        if (f >= f1)
+          continue; 
+        f1 = f;
+        building1 = building3;
+        building2 = building;
+      } 
+    } 
+    if (building2 == null || f1 > 30.0F || (bool && !energyStep && supplyLeft() > 0.0F && f1 > 40.0F)) {
+      finishStep();
+      return;
+    } 
+    Seq<BuildPlan> seq1 = nodeChain(building1, building2);
+    if (seq1 == null || seq1.isEmpty()) {
+      finishStep();
+      return;
+    } 
+    toast("Auto Power Node: ligando a energia (" + seq1.size + " nos).");
+    current = seq1;
+    float f2 = 0.0F;
+    float f3 = 0.0F;
+    for (BuildPlan buildPlan : seq1) {
+      f2 += buildPlan.x;
+      f3 += buildPlan.y;
+    } 
+    centerX = f2 / seq1.size * 8.0F;
+    centerY = f3 / seq1.size * 8.0F;
+    energyStep = true;
+    phase = Phase.MOVE;
+    phaseStart = Time.time;
+  }
+  
+  private static void finishStep() {
+    if (!energyStep && idx >= 0 && idx < done.length)
+      done[idx] = true; 
+    energyStep = false;
+    current = new Seq();
+    releaseCamera();
+    phase = Phase.NEXT;
+    nextCheck = Time.time + 60.0F;
+  }
+  
+  private static Seq<BuildPlan> nodeChain(Building paramBuilding1, Building paramBuilding2) {
+    Seq<BuildPlan> seq = new Seq();
+    float f2 = (paramBuilding2.tileX() - paramBuilding1.tileX());
+    float f1, f3 = Mathf.dst(f2, f1 = (paramBuilding2.tileY() - paramBuilding1.tileY()));
+    int i = Math.max(1, (int)Math.ceil((f3 / 5.0F)) - 1);
+    if (i > 5)
+      return null; 
+    for (byte b = 1; b <= i; b++) {
+      float f = b / (i + 1);
+      int k = Mathf.round(paramBuilding1.tileX() + f2 * f);
+      int j, arrayOfInt[] = freeSpot(Blocks.powerNode, k, j = Mathf.round(paramBuilding1.tileY() + f1 * f), 3);
+      if (arrayOfInt == null)
+        return null; 
+      seq.add(new BuildPlan(arrayOfInt[0], arrayOfInt[1], 0, Blocks.powerNode));
+    } 
+    return seq;
+  }
+  
+  private static int[] freeSpot(Block paramBlock, int paramInt1, int paramInt2, int paramInt3) {
+    for (byte b = 0; b <= paramInt3; b++) {
+      for (int i = paramInt1 - b; i <= paramInt1 + b; i++) {
+        for (int j = paramInt2 - b; j <= paramInt2 + b; ) {
+          if (!Build.validPlace(paramBlock, Vars.player.team(), i, j, 0)) {
+            j++;
+            continue;
+          } 
+          return new int[] { i, j };
+        } 
+      } 
+    } 
+    return null;
+  }
+  
+  private static float supplyLeft() {
+    ObjectSet objectSet = new ObjectSet();
+    for (Building building : Groups.build) {
+      if (building.team != Vars.player.team() || building.power == null || building.power.graph == null)
+        continue; 
+      objectSet.add(building.power.graph);
+    } 
+    float f = 0.0F;
+    for (ObjectSet.ObjectSetIterator<PowerGraph> objectSetIterator = objectSet.iterator(); objectSetIterator.hasNext(); ) {
+      PowerGraph powerGraph = objectSetIterator.next();
+      if (powerGraph.producers.size == 0)
+        continue; 
+      float f1 = 0.0F;
+      for (Building building : powerGraph.producers)
+        f1 += (building.block instanceof PowerGenerator) ? ((PowerGenerator)building.block).powerProduction : 0.0F; 
+      float f2 = 0.0F;
+      for (Building building : powerGraph.consumers) {
+        if (building.block.consPower == null || building.block.consPower.buffered)
+          continue; 
+        f2 += building.block.consPower.usage;
+      } 
+      f += f1 - f2;
+    } 
+    return f * 60.0F;
+  }
+  
+  private static float powerNeed(Seq<BuildPlan> paramSeq) {
+    float f = 0.0F;
+    for (BuildPlan buildPlan : paramSeq) {
+      if (buildPlan.block.consPower == null || buildPlan.block.consPower.buffered)
+        continue; 
+      f += buildPlan.block.consPower.usage;
+    } 
+    return f;
+  }
+  
+  private static Seq<BuildPlan> energyCluster(CoreBlock.CoreBuild paramCoreBuild) {
+    int[] arrayOfInt = rect(paramCoreBuild.tile.x, paramCoreBuild.tile.y, paramCoreBuild.block.size);
+    int[][] arrayOfInt1 = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } };
+    for (int i = arrayOfInt[0] - 1; i <= arrayOfInt[2] + 1; i++) {
+      for (int j = arrayOfInt[1] - 1; j <= arrayOfInt[3] + 1; j++) {
+        boolean bool2 = (i >= arrayOfInt[0] && i <= arrayOfInt[2]) ? true : false;
+        boolean bool1 = (j >= arrayOfInt[1] && j <= arrayOfInt[3]) ? true : false, bool3 = bool1;
+        if (bool2 != bool1) {
+          byte b1 = (i < arrayOfInt[0]) ? -1 : ((i > arrayOfInt[2]) ? 1 : 0);
+          byte b2 = (j < arrayOfInt[1]) ? -1 : ((j > arrayOfInt[3]) ? 1 : 0);
+          Seq<BuildPlan> seq = new Seq();
+          seq.add(new BuildPlan(i, j, 0, Blocks.unloader, Items.coal));
+          boolean bool = Build.validPlace(Blocks.unloader, Vars.player.team(), i, j, 0);
+          byte b3 = 0;
+          int[][] arrayOfInt2 = arrayOfInt1;
+          int k = arrayOfInt2.length;
+          for (byte b4 = 0; b4 < k; b4++) {
+            int[] arrayOfInt4 = arrayOfInt2[b4];
+            if (arrayOfInt4[0] != -b1 || arrayOfInt4[1] != -b2) {
+              int m = i + arrayOfInt4[0];
+              int n = j + arrayOfInt4[1];
+              if (Build.validPlace(Blocks.combustionGenerator, Vars.player.team(), m, n, 0)) {
+                seq.add(new BuildPlan(m, n, 0, Blocks.combustionGenerator));
+                b3++;
+              } 
+            } 
+          } 
+          int[] arrayOfInt3 = null;
+          if (bool && b3 >= 2 && (arrayOfInt3 = freeSpot(Blocks.powerNode, i + b1 * 3, j + b2 * 3, 3)) != null) {
+            seq.add(new BuildPlan(arrayOfInt3[0], arrayOfInt3[1], 0, Blocks.powerNode));
+            return seq;
+          } 
+        } 
+      } 
+    } 
+    return null;
+  }
+  
+  private static Seq<BuildPlan> fieldPlan(CoreBlock.CoreBuild paramCoreBuild, Seq<BuildPlan> paramSeq, String paramString, Unit paramUnit) {
+    try {
+      Item item = Vars.content.item(paramString);
+      if (item == null)
+        return null; 
+      int i = Vars.world.width();
+      int j = Vars.world.height();
+      int k = paramCoreBuild.tileX();
+      int m = paramCoreBuild.tileY();
+      byte b1 = 55;
+      boolean[] arrayOfBoolean1 = new boolean[i * j];
+      for (int n = Math.max(0, m - b1 - 20); n <= Math.min(j - 1, m + b1 + 20); n++) {
+        for (int i1 = Math.max(0, k - b1 - 20); i1 <= Math.min(i - 1, k + b1 + 20); i1++) {
+          Tile tile = Vars.world.tile(i1, n);
+          if (tile != null && tile.build == null && !tile.solid() && tile.drop() == item)
+            arrayOfBoolean1[n * i + i1] = true; 
+        } 
+      } 
+      boolean[] arrayOfBoolean2 = AutoConnectConveyor.reservedFromPlans(paramUnit);
+      Seq<BuildPlan> seq = copyAll(paramSeq);
+      byte b2 = 0;
+      for (BuildPlan buildPlan : seq) {
+        if (buildPlan.block instanceof mindustry.world.blocks.production.Drill)
+          b2++; 
+      } 
+      if (b2 == 0)
+        return null; 
+      ArrayList<float[]> arrayList = new ArrayList();
+      for (byte b3 = 0; b3 < 4; b3++) {
+        int[] arrayOfInt = bounds(seq);
+        int i1 = (arrayOfInt[0] + arrayOfInt[2]) / 2;
+        int i2 = (arrayOfInt[1] + arrayOfInt[3]) / 2;
+        for (int i3 = k - b1 - i1; i3 <= k + b1 - i1; i3++) {
+          for (int i4 = m - b1 - i2; i4 <= m + b1 - i2; i4++) {
+            byte b = 0;
+            for (BuildPlan buildPlan : seq) {
+              if (!(buildPlan.block instanceof mindustry.world.blocks.production.Drill))
+                continue; 
+              int[] arrayOfInt1 = rect(buildPlan.x + i3, buildPlan.y + i4, buildPlan.block.size);
+              byte b5 = 0;
+              for (int i5 = arrayOfInt1[0]; i5 <= arrayOfInt1[2]; i5++) {
+                for (int i6 = arrayOfInt1[1]; i6 <= arrayOfInt1[3]; i6++) {
+                  if (i5 >= 0 && i6 >= 0 && i5 < i && i6 < j && arrayOfBoolean1[i6 * i + i5])
+                    b5++; 
+                } 
+              } 
+              if (b5 * 4 >= buildPlan.block.size * buildPlan.block.size * 3)
+                b++; 
+            } 
+            if (b * 10 >= b2 * 6) {
+              float f = Mathf.dst((i1 + i3), (i2 + i4), k, m);
+              arrayList.add(new float[] { b * 10.0F - f * 0.3F, b3, i3, i4 });
+            } 
+          } 
+        } 
+        rotate(seq);
+      } 
+      Collections.sort(arrayList, (Comparator)new Comparator<float[]>() {
+            public int compare(float[] param1ArrayOffloat1, float[] param1ArrayOffloat2) {
+              return Float.compare(param1ArrayOffloat2[0], param1ArrayOffloat1[0]);
             }
-            phase = Phase.BUILD;
-            phaseStart = Time.time;
-            nextCheck = Time.time + 60.0f;
-            return;
-        }
-        cameraGo(unit, centerX, centerY);
-        if (Time.time - phaseStart > 2400.0f) {
-            abort("nao consegui chegar na obra");
-        }
-    }
-
-    private static void cameraGo(Unit unit, float f, float f2) {
-        if (!camHeld) {
-            camHeld = true;
-            prevDetach = Core.settings.getBool("detach-camera", false);
-            Core.camera.position.set(unit.x, unit.y);
-        }
-        Core.settings.put("detach-camera", true);
-        float f3 = Core.camera.position.x;
-        float f4 = Core.camera.position.y;
-        float dst = Mathf.dst(f3, f4, f, f2);
-        if (dst < 1.0f) {
-            return;
-        }
-        float min = Math.min(dst, Math.max(2.0f, unit.speed() * 1.25f) * Time.delta);
-        Core.camera.position.set(f3 + (((f - f3) / dst) * min), f4 + (((f2 - f4) / dst) * min));
-    }
-
-    private static void releaseCamera() {
-        if (camHeld) {
-            Core.settings.put("detach-camera", Boolean.valueOf(prevDetach));
-            camHeld = false;
-        }
-    }
-
-    private static void stepBuild(Unit unit) {
-        cameraGo(unit, centerX, centerY);
-        if (Time.time < nextCheck) {
-            return;
-        }
-        nextCheck = Time.time + 60.0f;
-        boolean z = true;
-        Iterator it = current.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            if (!isBuilt(buildPlan)) {
-                z = false;
-                boolean z2 = false;
-                Iterator it2 = unit.plans().iterator();
-                while (it2.hasNext()) {
-                    BuildPlan buildPlan2 = (BuildPlan) it2.next();
-                    if (buildPlan2.x == buildPlan.x && buildPlan2.y == buildPlan.y) {
-                        z2 = true;
-                    }
-                }
-                if (!z2 && Build.validPlace(buildPlan.block, Vars.player.team(), buildPlan.x, buildPlan.y, buildPlan.rotation)) {
-                    unit.addBuild(buildPlan.copy(), true);
-                }
-            }
-        }
-        if (z) {
-            phase = Phase.GRID;
-            phaseStart = Time.time;
-            nextCheck = Time.time + 30.0f;
-        } else if (Time.time - phaseStart > 9000.0f) {
-            abort("obra travada (recursos acabaram ou area bloqueada)");
-        }
-    }
-
-    private static void abort(String str) {
-        toast("Auto Dock: " + str + ". Tentando de novo depois.");
-        Vars.player.unit().plans().clear();
-        releaseCamera();
-        phase = Phase.NEXT;
-        nextCheck = Time.time + 1200.0f;
-    }
-
-    private static void stepGrid(CoreBlock.CoreBuild coreBuild, Unit unit) {
-        if (Time.time < nextCheck) {
-            return;
-        }
-        nextCheck = Time.time + 60.0f;
-        ObjectSet objectSet = new ObjectSet();
-        Seq seq = new Seq();
-        Iterator it = current.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            Building building = buildPlan.tile() == null ? null : buildPlan.tile().build;
-            if (building != null && building.power != null) {
-                objectSet.add(building.power.graph);
-                seq.add(building);
-            }
-        }
-        if (seq.isEmpty() || (energyStep && seq.size < 1)) {
-            finishStep();
-            return;
-        }
-        boolean z = false;
-        ObjectSet.ObjectSetIterator it2 = objectSet.iterator();
-        while (it2.hasNext()) {
-            if (((PowerGraph) it2.next()).producers.size > 0) {
-                z = true;
-            }
-        }
-        Building building2 = null;
-        Building building3 = null;
-        float f = 1.0E9f;
-        Iterator it3 = Groups.build.iterator();
-        while (it3.hasNext()) {
-            Building building4 = (Building) it3.next();
-            if (building4.team == Vars.player.team() && building4.power != null && !objectSet.contains(building4.power.graph) && (building4.power.graph.producers.size != 0 || building4.power.graph.batteries.size != 0)) {
-                Iterator it4 = seq.iterator();
-                while (it4.hasNext()) {
-                    Building building5 = (Building) it4.next();
-                    float dst = Mathf.dst(building4.tileX(), building4.tileY(), building5.tileX(), building5.tileY());
-                    if (dst < f) {
-                        f = dst;
-                        building2 = building5;
-                        building3 = building4;
-                    }
-                }
-            }
-        }
-        if (building3 == null || f > 30.0f || (z && !energyStep && supplyLeft() > 0.0f && f > 40.0f)) {
-            finishStep();
-            return;
-        }
-        Seq<BuildPlan> nodeChain = nodeChain(building2, building3);
-        if (nodeChain == null || nodeChain.isEmpty()) {
-            finishStep();
-            return;
-        }
-        toast("Auto Power Node: ligando a energia (" + nodeChain.size + " nos).");
-        current = nodeChain;
-        float f2 = 0.0f;
-        float f3 = 0.0f;
-        Iterator it5 = nodeChain.iterator();
-        while (it5.hasNext()) {
-            BuildPlan buildPlan2 = (BuildPlan) it5.next();
-            f2 += buildPlan2.x;
-            f3 += buildPlan2.y;
-        }
-        centerX = (f2 / nodeChain.size) * 8.0f;
-        centerY = (f3 / nodeChain.size) * 8.0f;
-        energyStep = true;
-        phase = Phase.MOVE;
-        phaseStart = Time.time;
-    }
-
-    private static void finishStep() {
-        if (!energyStep && idx >= 0 && idx < done.length) {
-            done[idx] = true;
-        }
-        energyStep = false;
-        current = new Seq<>();
-        releaseCamera();
-        phase = Phase.NEXT;
-        nextCheck = Time.time + 60.0f;
-    }
-
-    private static Seq<BuildPlan> nodeChain(Building building, Building building2) {
-        Seq<BuildPlan> seq = new Seq<>();
-        float tileX = building2.tileX() - building.tileX();
-        float tileY = building2.tileY() - building.tileY();
-        int max = Math.max(1, ((int) Math.ceil(Mathf.dst(tileX, tileY) / 5.0f)) - 1);
-        if (max > 5) {
-            return null;
-        }
-        for (int i = 1; i <= max; i++) {
-            float f = i / (max + 1);
-            int[] freeSpot = freeSpot(Blocks.powerNode, Mathf.round(building.tileX() + (tileX * f)), Mathf.round(building.tileY() + (tileY * f)), 3);
-            if (freeSpot == null) {
-                return null;
-            }
-            seq.add(new BuildPlan(freeSpot[0], freeSpot[1], 0, Blocks.powerNode));
-        }
-        return seq;
-    }
-
-    private static int[] freeSpot(Block block, int i, int i2, int i3) {
-        for (int i4 = 0; i4 <= i3; i4++) {
-            for (int i5 = i - i4; i5 <= i + i4; i5++) {
-                for (int i6 = i2 - i4; i6 <= i2 + i4; i6++) {
-                    if (Build.validPlace(block, Vars.player.team(), i5, i6, 0)) {
-                        return new int[]{i5, i6};
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private static float supplyLeft() {
-        ObjectSet objectSet = new ObjectSet();
-        Iterator it = Groups.build.iterator();
-        while (it.hasNext()) {
-            Building building = (Building) it.next();
-            if (building.team == Vars.player.team() && building.power != null && building.power.graph != null) {
-                objectSet.add(building.power.graph);
-            }
-        }
-        float f = 0.0f;
-        ObjectSet.ObjectSetIterator it2 = objectSet.iterator();
-        while (it2.hasNext()) {
-            PowerGraph powerGraph = (PowerGraph) it2.next();
-            if (powerGraph.producers.size != 0) {
-                float f2 = 0.0f;
-                Iterator it3 = powerGraph.producers.iterator();
-                while (it3.hasNext()) {
-                    Building building2 = (Building) it3.next();
-                    f2 += building2.block instanceof PowerGenerator ? building2.block.powerProduction : 0.0f;
-                }
-                float f3 = 0.0f;
-                Iterator it4 = powerGraph.consumers.iterator();
-                while (it4.hasNext()) {
-                    Building building3 = (Building) it4.next();
-                    if (building3.block.consPower != null && !building3.block.consPower.buffered) {
-                        f3 += building3.block.consPower.usage;
-                    }
-                }
-                f += f2 - f3;
-            }
-        }
-        return f * 60.0f;
-    }
-
-    private static float powerNeed(Seq<BuildPlan> seq) {
-        float f = 0.0f;
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            if (buildPlan.block.consPower != null && !buildPlan.block.consPower.buffered) {
-                f += buildPlan.block.consPower.usage;
-            }
-        }
-        return f;
-    }
-
-    /* JADX WARN: Multi-variable type inference failed */
-    private static Seq<BuildPlan> energyCluster(CoreBlock.CoreBuild coreBuild) {
-        int[] freeSpot;
-        int[] rect = rect(coreBuild.tile.x, coreBuild.tile.y, coreBuild.block.size);
-        int[] iArr = {new int[]{1, 0}, new int[]{0, 1}, new int[]{-1, 0}, new int[]{0, -1}};
-        int i = rect[0] - 1;
-        while (i <= rect[2] + 1) {
-            int i2 = rect[1] - 1;
-            while (i2 <= rect[3] + 1) {
-                if ((i >= rect[0] && i <= rect[2]) != (i2 >= rect[1] && i2 <= rect[3])) {
-                    int i3 = i < rect[0] ? -1 : i > rect[2] ? 1 : 0;
-                    int i4 = i2 < rect[1] ? -1 : i2 > rect[3] ? 1 : 0;
-                    Seq<BuildPlan> seq = new Seq<>();
-                    seq.add(new BuildPlan(i, i2, 0, Blocks.unloader, Items.coal));
-                    boolean validPlace = Build.validPlace(Blocks.unloader, Vars.player.team(), i, i2, 0);
-                    int i5 = 0;
-                    for (Object[] objArr : iArr) {
-                        if (objArr[0] != (-i3) || objArr[1] != (-i4)) {
-                            int i6 = i + objArr[0];
-                            int i7 = i2 + objArr[1];
-                            if (Build.validPlace(Blocks.combustionGenerator, Vars.player.team(), i6, i7, 0)) {
-                                seq.add(new BuildPlan(i6, i7, 0, Blocks.combustionGenerator));
-                                i5++;
-                            }
-                        }
-                    }
-                    if (validPlace && i5 >= 2 && (freeSpot = freeSpot(Blocks.powerNode, i + (i3 * 3), i2 + (i4 * 3), 3)) != null) {
-                        seq.add(new BuildPlan(freeSpot[0], freeSpot[1], 0, Blocks.powerNode));
-                        return seq;
-                    }
-                }
-                i2++;
-            }
-            i++;
-        }
-        return null;
-    }
-
-    private static Seq<BuildPlan> fieldPlan(CoreBlock.CoreBuild coreBuild, Seq<BuildPlan> seq, String str, Unit unit) {
-        BuildPlan buildPlan;
-        try {
-            Item item = Vars.content.item(str);
-            if (item == null) {
-                return null;
-            }
-            int width = Vars.world.width();
-            int height = Vars.world.height();
-            int tileX = coreBuild.tileX();
-            int tileY = coreBuild.tileY();
-            boolean[] zArr = new boolean[width * height];
-            for (int max = Math.max(0, (tileY - 55) - 20); max <= Math.min(height - 1, tileY + 55 + 20); max++) {
-                for (int max2 = Math.max(0, (tileX - 55) - 20); max2 <= Math.min(width - 1, tileX + 55 + 20); max2++) {
-                    Tile tile = Vars.world.tile(max2, max);
-                    if (tile != null && tile.build == null && !tile.solid() && tile.drop() == item) {
-                        zArr[(max * width) + max2] = true;
-                    }
-                }
-            }
-            boolean[] reservedFromPlans = AutoConnectConveyor.reservedFromPlans(unit);
-            Seq<BuildPlan> copyAll = copyAll(seq);
-            int i = 0;
-            Iterator it = copyAll.iterator();
-            while (it.hasNext()) {
-                if (((BuildPlan) it.next()).block instanceof Drill) {
-                    i++;
-                }
-            }
-            if (i == 0) {
-                return null;
-            }
-            ArrayList arrayList = new ArrayList();
-            for (int i2 = 0; i2 < 4; i2++) {
-                int[] bounds = bounds(copyAll);
-                int i3 = (bounds[0] + bounds[2]) / 2;
-                int i4 = (bounds[1] + bounds[3]) / 2;
-                for (int i5 = (tileX - 55) - i3; i5 <= (tileX + 55) - i3; i5++) {
-                    for (int i6 = (tileY - 55) - i4; i6 <= (tileY + 55) - i4; i6++) {
-                        int i7 = 0;
-                        Iterator it2 = copyAll.iterator();
-                        while (it2.hasNext()) {
-                            BuildPlan buildPlan2 = (BuildPlan) it2.next();
-                            if (buildPlan2.block instanceof Drill) {
-                                int[] rect = rect(buildPlan2.x + i5, buildPlan2.y + i6, buildPlan2.block.size);
-                                int i8 = 0;
-                                for (int i9 = rect[0]; i9 <= rect[2]; i9++) {
-                                    for (int i10 = rect[1]; i10 <= rect[3]; i10++) {
-                                        if (i9 >= 0 && i10 >= 0 && i9 < width && i10 < height && zArr[(i10 * width) + i9]) {
-                                            i8++;
-                                        }
-                                    }
-                                }
-                                if (i8 * 4 >= buildPlan2.block.size * buildPlan2.block.size * 3) {
-                                    i7++;
-                                }
-                            }
-                        }
-                        if (i7 * 10 >= i * 6) {
-                            arrayList.add(new float[]{(i7 * 10.0f) - (Mathf.dst(i3 + i5, i4 + i6, tileX, tileY) * 0.3f), i2, i5, i6});
-                        }
-                    }
-                }
-                rotate(copyAll);
-            }
-            Collections.sort(arrayList, new Comparator<float[]>() { // from class: lunarians.AutoDock.1
-                @Override // java.util.Comparator
-                public int compare(float[] fArr, float[] fArr2) {
-                    return Float.compare(fArr2[0], fArr[0]);
-                }
-            });
-            ArrayList<int[]> dockRects = dockRects(coreBuild);
-            int i11 = 0;
-            Iterator it3 = arrayList.iterator();
-            while (it3.hasNext()) {
-                float[] fArr = (float[]) it3.next();
-                int i12 = i11;
-                i11++;
-                if (i12 < 40) {
-                    Seq<BuildPlan> copyAll2 = copyAll(seq);
-                    for (int i13 = 0; i13 < ((int) fArr[1]); i13++) {
-                        rotate(copyAll2);
-                    }
-                    int i14 = (int) fArr[2];
-                    int i15 = (int) fArr[3];
-                    HashSet hashSet = new HashSet();
-                    boolean z = true;
-                    Iterator it4 = copyAll2.iterator();
-                    do {
-                        if (!it4.hasNext()) {
-                            break;
-                        }
-                        buildPlan = (BuildPlan) it4.next();
-                        buildPlan.x += i14;
-                        buildPlan.y += i15;
-                        int[] rect2 = rect(buildPlan.x, buildPlan.y, buildPlan.block.size);
-                        if (overlapsAny(new int[]{rect2[0] - 2, rect2[1] - 2, rect2[2] + 2, rect2[3] + 2}, dockRects)) {
-                            z = false;
-                            break;
-                        }
-                        for (int i16 = rect2[0]; i16 <= rect2[2] && z; i16++) {
-                            for (int i17 = rect2[1]; i17 <= rect2[3]; i17++) {
-                                if (i16 < 0 || i17 < 0 || i16 >= width || i17 >= height || reservedFromPlans[(i17 * width) + i16]) {
-                                    z = false;
-                                    break;
-                                }
-                                hashSet.add(Integer.valueOf((i17 * width) + i16));
-                            }
-                        }
-                        if (!z) {
-                            break;
-                        }
-                    } while (Build.validPlace(buildPlan.block, Vars.player.team(), buildPlan.x, buildPlan.y, buildPlan.rotation));
-                    z = false;
-                    if (z) {
-                        int[] iArr = null;
-                        float f = 1.0E9f;
-                        int[] iArr2 = {1, 0, -1, 0};
-                        int[] iArr3 = {0, 1, 0, -1};
-                        Iterator it5 = copyAll2.iterator();
-                        while (it5.hasNext()) {
-                            BuildPlan buildPlan3 = (BuildPlan) it5.next();
-                            if (buildPlan3.block instanceof Conveyor) {
-                                int i18 = buildPlan3.x + iArr2[buildPlan3.rotation & 3];
-                                int i19 = buildPlan3.y + iArr3[buildPlan3.rotation & 3];
-                                if (Vars.world.tiles.in(i18, i19) && !hashSet.contains(Integer.valueOf((i19 * width) + i18))) {
-                                    float dst = Mathf.dst(i18, i19, tileX, tileY);
-                                    if (dst < f) {
-                                        f = dst;
-                                        iArr = new int[]{i18, i19, buildPlan3.rotation & 3};
-                                    }
-                                }
-                            }
-                        }
-                        if (iArr != null) {
-                            boolean[] zArr2 = (boolean[]) reservedFromPlans.clone();
-                            Iterator it6 = copyAll2.iterator();
-                            while (it6.hasNext()) {
-                                AutoConnectConveyor.markPlan((BuildPlan) it6.next(), zArr2);
-                            }
-                            Seq<BuildPlan> planRoute = AutoConnectConveyor.planRoute(iArr[0], iArr[1], iArr[2], zArr2);
-                            if (planRoute == null || planRoute.isEmpty()) {
-                                planRoute = AutoConnectConveyor.planRoute(iArr[0], iArr[1], -1, zArr2);
-                            }
-                            if (planRoute != null && !planRoute.isEmpty()) {
-                                Seq<BuildPlan> seq2 = new Seq<>();
-                                seq2.addAll(copyAll2);
-                                seq2.addAll(planRoute);
-                                return seq2;
-                            }
-                        }
-                    }
-                } else {
-                    return null;
-                }
-            }
-            return null;
-        } catch (Throwable th) {
-            Log.err("[Lunarians] fieldPlan", th);
-            return null;
-        }
-    }
-
-    private static Seq<BuildPlan> bestDock(CoreBlock.CoreBuild coreBuild, Seq<BuildPlan> seq, Unit unit) {
-        Seq<BuildPlan> bestDockImpl = bestDockImpl(coreBuild, seq, unit, true);
-        return bestDockImpl != null ? bestDockImpl : bestDockImpl(coreBuild, seq, unit, false);
-    }
-
-    private static ArrayList<int[]> dockRects(CoreBlock.CoreBuild coreBuild) {
-        ArrayList<int[]> arrayList = new ArrayList<>();
-        arrayList.add(rect(coreBuild.tile.x, coreBuild.tile.y, coreBuild.block.size));
-        try {
-            Iterator it = coreBuild.proximity.iterator();
-            while (it.hasNext()) {
-                StorageBlock.StorageBuild storageBuild = (Building) it.next();
-                if ((storageBuild instanceof StorageBlock.StorageBuild) && storageBuild.linkedCore == coreBuild) {
-                    arrayList.add(rect(((Building) storageBuild).tile.x, ((Building) storageBuild).tile.y, ((Building) storageBuild).block.size));
-                }
-            }
-        } catch (Throwable th) {
-        }
-        return arrayList;
-    }
-
-    private static boolean touchesAny(BuildPlan buildPlan, int i, int i2, ArrayList<int[]> arrayList) {
-        Iterator<int[]> it = arrayList.iterator();
-        while (it.hasNext()) {
-            if (touches(buildPlan, i, i2, it.next())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean overlapsAny(int[] iArr, ArrayList<int[]> arrayList) {
-        Iterator<int[]> it = arrayList.iterator();
-        while (it.hasNext()) {
-            int[] next = it.next();
-            if (iArr[2] >= next[0] && iArr[0] <= next[2] && iArr[3] >= next[1] && iArr[1] <= next[3]) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static int ringCovered(Seq<BuildPlan> seq, int i, int i2, ArrayList<int[]> arrayList) {
-        int i3 = 0;
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            int[] rect = rect(buildPlan.x + i, buildPlan.y + i2, buildPlan.block.size);
-            int i4 = rect[0];
-            while (i4 <= rect[2]) {
-                int i5 = rect[1];
-                while (i5 <= rect[3]) {
-                    Iterator<int[]> it2 = arrayList.iterator();
-                    while (true) {
-                        if (it2.hasNext()) {
-                            int[] next = it2.next();
-                            if ((i4 >= next[0] && i4 <= next[2]) != (i5 >= next[1] && i5 <= next[3]) && i4 >= next[0] - 1 && i4 <= next[2] + 1 && i5 >= next[1] - 1 && i5 <= next[3] + 1) {
-                                i3++;
-                                break;
-                            }
-                        }
-                    }
-                    i5++;
-                }
-                i4++;
-            }
-        }
-        return i3;
-    }
-
-    /* JADX WARN: Removed duplicated region for block: B:69:0x021f  */
-    /* JADX WARN: Removed duplicated region for block: B:86:0x02ca A[SYNTHETIC] */
-    /*
-        Code decompiled incorrectly, please refer to instructions dump.
-    */
-    private static Seq<BuildPlan> bestDockImpl(CoreBlock.CoreBuild coreBuild, Seq<BuildPlan> seq, Unit unit, boolean z) {
-        float max;
-        ArrayList<int[]> dockRects = dockRects(coreBuild);
-        int i = 1048576;
-        int i2 = 1048576;
-        int i3 = -1048576;
-        int i4 = -1048576;
-        Iterator<int[]> it = dockRects.iterator();
-        while (it.hasNext()) {
-            int[] next = it.next();
-            i = Math.min(i, next[0]);
-            i2 = Math.min(i2, next[1]);
-            i3 = Math.max(i3, next[2]);
-            i4 = Math.max(i4, next[3]);
-        }
-        int i5 = 0;
-        boolean z2 = false;
-        Iterator it2 = seq.iterator();
-        while (it2.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it2.next();
-            if (buildPlan.block == Blocks.unloader) {
-                i5++;
-            }
+          });
+      ArrayList<int[]> arrayList1 = dockRects(paramCoreBuild);
+      byte b4 = 0;
+      for (float[] arrayOfFloat : arrayList) {
+        if (b4++ >= 40)
+          break; 
+        Seq<BuildPlan> seq1 = copyAll(paramSeq);
+        int i1;
+        for (i1 = 0; i1 < (int)arrayOfFloat[1]; ) {
+          rotate(seq1);
+          i1++;
+        } 
+        i1 = (int)arrayOfFloat[2];
+        int i2 = (int)arrayOfFloat[3];
+        HashSet<Integer> hashSet = new HashSet();
+        boolean bool = true;
+        for (BuildPlan buildPlan : seq1) {
+          buildPlan.x += i1;
+          buildPlan.y += i2;
+          int[] arrayOfInt = rect(buildPlan.x, buildPlan.y, buildPlan.block.size);
+          if (overlapsAny(new int[] { arrayOfInt[0] - 2, arrayOfInt[1] - 2, arrayOfInt[2] + 2, arrayOfInt[3] + 2 }, arrayList1)) {
+            bool = false;
+            break;
+          } 
+          for (int i3 = arrayOfInt[0]; i3 <= arrayOfInt[2] && bool; i3++) {
+            for (int i4 = arrayOfInt[1]; i4 <= arrayOfInt[3]; i4++) {
+              if (i3 < 0 || i4 < 0 || i3 >= i || i4 >= j || arrayOfBoolean2[i4 * i + i3]) {
+                bool = false;
+                break;
+              } 
+              hashSet.add(Integer.valueOf(i4 * i + i3));
+            } 
+          } 
+          if (!bool || !Build.validPlace(buildPlan.block, Vars.player.team(), buildPlan.x, buildPlan.y, buildPlan.rotation)) {
+            bool = false;
+            break;
+          } 
+        } 
+        if (!bool)
+          continue; 
+        int[] arrayOfInt1 = null;
+        float f = 1.0E9F;
+        int[] arrayOfInt2 = { 1, 0, -1, 0 };
+        int[] arrayOfInt3 = { 0, 1, 0, -1 };
+        for (BuildPlan buildPlan : seq1) {
+          if (!(buildPlan.block instanceof mindustry.world.blocks.distribution.Conveyor))
+            continue; 
+          int i3 = buildPlan.x + arrayOfInt2[buildPlan.rotation & 0x3];
+          int i4 = buildPlan.y + arrayOfInt3[buildPlan.rotation & 0x3];
+          if (!Vars.world.tiles.in(i3, i4) || hashSet.contains(Integer.valueOf(i4 * i + i3)))
+            continue; 
+          float f1 = Mathf.dst(i3, i4, k, m);
+          if (f1 < f) {
+            f = f1;
+            arrayOfInt1 = new int[] { i3, i4, buildPlan.rotation & 0x3 };
+          } 
+        } 
+        if (arrayOfInt1 == null)
+          continue; 
+        boolean[] arrayOfBoolean = (boolean[])arrayOfBoolean2.clone();
+        for (BuildPlan buildPlan : seq1)
+          AutoConnectConveyor.markPlan(buildPlan, arrayOfBoolean); 
+        Seq<BuildPlan> seq2 = AutoConnectConveyor.planRoute(arrayOfInt1[0], arrayOfInt1[1], arrayOfInt1[2], arrayOfBoolean);
+        if (seq2 == null || seq2.isEmpty())
+          seq2 = AutoConnectConveyor.planRoute(arrayOfInt1[0], arrayOfInt1[1], -1, arrayOfBoolean); 
+        if (seq2 == null || seq2.isEmpty())
+          continue; 
+        Seq<BuildPlan> seq3 = new Seq();
+        seq3.addAll(seq1);
+        seq3.addAll(seq2);
+        return seq3;
+      } 
+    } catch (Throwable throwable) {
+      Log.err("[Lunarians] fieldPlan", throwable);
+    } 
+    return null;
+  }
+  
+  private static Seq<BuildPlan> bestDock(CoreBlock.CoreBuild paramCoreBuild, Seq<BuildPlan> paramSeq, Unit paramUnit) {
+    Seq<BuildPlan> seq = bestDockImpl(paramCoreBuild, paramSeq, paramUnit, true);
+    return (seq != null) ? seq : bestDockImpl(paramCoreBuild, paramSeq, paramUnit, false);
+  }
+  
+  private static ArrayList<int[]> dockRects(CoreBlock.CoreBuild paramCoreBuild) {
+    ArrayList<int[]> arrayList = new ArrayList();
+    arrayList.add(rect(paramCoreBuild.tile.x, paramCoreBuild.tile.y, paramCoreBuild.block.size));
+    try {
+      for (Building building : paramCoreBuild.proximity) {
+        if (building instanceof StorageBlock.StorageBuild && ((StorageBlock.StorageBuild)building).linkedCore == paramCoreBuild)
+          arrayList.add(rect(building.tile.x, building.tile.y, building.block.size)); 
+      } 
+    } catch (Throwable throwable) {}
+    return arrayList;
+  }
+  
+  private static boolean touchesAny(BuildPlan paramBuildPlan, int paramInt1, int paramInt2, ArrayList<int[]> paramArrayList) {
+    for (int[] arrayOfInt : paramArrayList) {
+      if (touches(paramBuildPlan, paramInt1, paramInt2, arrayOfInt))
+        return true; 
+    } 
+    return false;
+  }
+  
+  private static boolean overlapsAny(int[] paramArrayOfint, ArrayList<int[]> paramArrayList) {
+    for (int[] arrayOfInt : paramArrayList) {
+      if (paramArrayOfint[2] >= arrayOfInt[0] && paramArrayOfint[0] <= arrayOfInt[2] && paramArrayOfint[3] >= arrayOfInt[1] && paramArrayOfint[1] <= arrayOfInt[3])
+        return true; 
+    } 
+    return false;
+  }
+  
+  private static int ringCovered(Seq<BuildPlan> paramSeq, int paramInt1, int paramInt2, ArrayList<int[]> paramArrayList) {
+    byte b = 0;
+    for (BuildPlan buildPlan : paramSeq) {
+      int[] arrayOfInt = rect(buildPlan.x + paramInt1, buildPlan.y + paramInt2, buildPlan.block.size);
+      for (int i = arrayOfInt[0]; i <= arrayOfInt[2]; i++) {
+        for (int j = arrayOfInt[1]; j <= arrayOfInt[3]; j++) {
+          for (int[] arrayOfInt1 : paramArrayList) {
+            boolean bool1 = (i >= arrayOfInt1[0] && i <= arrayOfInt1[2]) ? true : false;
+            boolean bool2 = (j >= arrayOfInt1[1] && j <= arrayOfInt1[3]) ? true : false;
+            if (bool1 != bool2 && i >= arrayOfInt1[0] - 1 && i <= arrayOfInt1[2] + 1 && j >= arrayOfInt1[1] - 1 && j <= arrayOfInt1[3] + 1) {
+              b++;
+              break;
+            } 
+          } 
+        } 
+      } 
+    } 
+    return b;
+  }
+  
+  private static Seq<BuildPlan> bestDockImpl(CoreBlock.CoreBuild paramCoreBuild, Seq<BuildPlan> paramSeq, Unit paramUnit, boolean paramBoolean) {
+    ArrayList<int[]> arrayList = dockRects(paramCoreBuild);
+    int i = 1048576, j = 1048576, k = -1048576, m = -1048576;
+    for (int[] arrayOfInt : arrayList) {
+      i = Math.min(i, arrayOfInt[0]);
+      j = Math.min(j, arrayOfInt[1]);
+      k = Math.max(k, arrayOfInt[2]);
+      m = Math.max(m, arrayOfInt[3]);
+    } 
+    byte b1 = 0;
+    boolean bool = false;
+    for (BuildPlan buildPlan : paramSeq) {
+      if (buildPlan.block == Blocks.unloader)
+        b1++; 
+      if (buildPlan.block instanceof StorageBlock)
+        bool = true; 
+    } 
+    Seq<BuildPlan> seq1 = null;
+    float f = -1.0E9F;
+    Seq<BuildPlan> seq2 = copyAll(paramSeq);
+    for (byte b2 = 0; b2 < 4; b2++) {
+      int[] arrayOfInt = bounds(seq2);
+      for (int n = i - arrayOfInt[2] - 1; n <= k - arrayOfInt[0] + 1; n++) {
+        for (int i1 = j - arrayOfInt[3] - 1; i1 <= m - arrayOfInt[1] + 1; i1++) {
+          byte b3 = 0;
+          byte b4 = 0;
+          boolean bool1 = false;
+          for (BuildPlan buildPlan : seq2) {
+            int[] arrayOfInt1 = rect(buildPlan.x + n, buildPlan.y + i1, buildPlan.block.size);
+            if (overlapsAny(arrayOfInt1, arrayList)) {
+              bool1 = true;
+              break;
+            } 
+            if (!touchesAny(buildPlan, n, i1, arrayList))
+              continue; 
             if (buildPlan.block instanceof StorageBlock) {
-                z2 = true;
-            }
-        }
-        Seq<BuildPlan> seq2 = null;
-        float f = -1.0E9f;
-        Seq<BuildPlan> copyAll = copyAll(seq);
-        for (int i6 = 0; i6 < 4; i6++) {
-            int[] bounds = bounds(copyAll);
-            for (int i7 = (i - bounds[2]) - 1; i7 <= (i3 - bounds[0]) + 1; i7++) {
-                for (int i8 = (i2 - bounds[3]) - 1; i8 <= (i4 - bounds[1]) + 1; i8++) {
-                    int i9 = 0;
-                    int i10 = 0;
-                    boolean z3 = false;
-                    Iterator it3 = copyAll.iterator();
-                    while (true) {
-                        if (!it3.hasNext()) {
-                            break;
-                        }
-                        BuildPlan buildPlan2 = (BuildPlan) it3.next();
-                        if (overlapsAny(rect(buildPlan2.x + i7, buildPlan2.y + i8, buildPlan2.block.size), dockRects)) {
-                            z3 = true;
-                            break;
-                        }
-                        if (touchesAny(buildPlan2, i7, i8, dockRects)) {
-                            if (buildPlan2.block instanceof StorageBlock) {
-                                i9++;
-                            } else if (buildPlan2.block == Blocks.unloader) {
-                                i10++;
-                            }
-                        }
-                    }
-                    if (!z3) {
-                        if (!z2) {
-                            if (i10 == 0) {
-                            }
-                            if (z || z2 || i10 >= i5) {
-                                max = (((i9 * 100.0f) + (i10 * 10.0f)) - (3.0f * Math.max(0, (ringCovered(copyAll, i7, i8, dockRects) - i9) - i10))) - (Mathf.dst(((bounds[0] + bounds[2]) / 2.0f) + i7, ((bounds[1] + bounds[3]) / 2.0f) + i8, unit.tileX(), unit.tileY()) * 0.01f);
-                                if (max <= f) {
-                                    boolean z4 = true;
-                                    Iterator it4 = copyAll.iterator();
-                                    while (true) {
-                                        if (!it4.hasNext()) {
-                                            break;
-                                        }
-                                        BuildPlan buildPlan3 = (BuildPlan) it4.next();
-                                        if (!Build.validPlace(buildPlan3.block, Vars.player.team(), buildPlan3.x + i7, buildPlan3.y + i8, buildPlan3.rotation)) {
-                                            z4 = false;
-                                            break;
-                                        }
-                                    }
-                                    if (z4) {
-                                        f = max;
-                                        seq2 = new Seq<>();
-                                        Iterator it5 = copyAll.iterator();
-                                        while (it5.hasNext()) {
-                                            BuildPlan copy = ((BuildPlan) it5.next()).copy();
-                                            copy.x += i7;
-                                            copy.y += i8;
-                                            seq2.add(copy);
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            if (i9 == 0) {
-                            }
-                            if (z) {
-                            }
-                            max = (((i9 * 100.0f) + (i10 * 10.0f)) - (3.0f * Math.max(0, (ringCovered(copyAll, i7, i8, dockRects) - i9) - i10))) - (Mathf.dst(((bounds[0] + bounds[2]) / 2.0f) + i7, ((bounds[1] + bounds[3]) / 2.0f) + i8, unit.tileX(), unit.tileY()) * 0.01f);
-                            if (max <= f) {
-                            }
-                        }
-                    }
-                }
-            }
-            rotate(copyAll);
-        }
-        return seq2;
-    }
-
-    private static boolean touches(BuildPlan buildPlan, int i, int i2, int[] iArr) {
-        int[] rect = rect(buildPlan.x + i, buildPlan.y + i2, buildPlan.block.size);
-        return ((rect[2] >= iArr[0] && rect[0] <= iArr[2]) && (rect[3] + 1 == iArr[1] || rect[1] - 1 == iArr[3])) || ((rect[3] >= iArr[1] && rect[1] <= iArr[3]) && (rect[2] + 1 == iArr[0] || rect[0] - 1 == iArr[2]));
-    }
-
-    private static int[] rect(int i, int i2, int i3) {
-        int i4 = -((i3 - 1) / 2);
-        return new int[]{i + i4, i2 + i4, ((i + i4) + i3) - 1, ((i2 + i4) + i3) - 1};
-    }
-
-    private static int[] bounds(Seq<BuildPlan> seq) {
-        int i = 1048576;
-        int i2 = 1048576;
-        int i3 = -1048576;
-        int i4 = -1048576;
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            int[] rect = rect(buildPlan.x, buildPlan.y, buildPlan.block.size);
-            i = Math.min(i, rect[0]);
-            i2 = Math.min(i2, rect[1]);
-            i3 = Math.max(i3, rect[2]);
-            i4 = Math.max(i4, rect[3]);
-        }
-        return new int[]{i, i2, i3, i4};
-    }
-
-    private static Seq<BuildPlan> copyAll(Seq<BuildPlan> seq) {
-        Seq<BuildPlan> seq2 = new Seq<>();
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            seq2.add(((BuildPlan) it.next()).copy());
-        }
-        return seq2;
-    }
-
-    private static void rotate(Seq<BuildPlan> seq) {
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            BuildPlan buildPlan = (BuildPlan) it.next();
-            float f = buildPlan.block.size % 2 == 0 ? -0.5f : 0.0f;
-            buildPlan.pointConfig(point2 -> {
-                point2.set(Mathf.floor((-(point2.y + f)) - f), Mathf.floor((point2.x + f) - f));
-            });
-            float f2 = (buildPlan.x * 8.0f) + buildPlan.block.offset;
-            buildPlan.x = World.toTile((-((buildPlan.y * 8.0f) + buildPlan.block.offset)) - buildPlan.block.offset);
-            buildPlan.y = World.toTile(f2 - buildPlan.block.offset);
-            buildPlan.rotation = buildPlan.block.planRotation(Mathf.mod(buildPlan.rotation + 1, 4));
-        }
-    }
-
-    private static Schematic find(String str) {
-        for (String str2 : str.split("\\|")) {
-            Iterator it = Vars.schematics.all().iterator();
-            while (it.hasNext()) {
-                Schematic schematic = (Schematic) it.next();
-                if (str2.equals(schematic.name())) {
-                    return schematic;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static boolean isBuilt(BuildPlan buildPlan) {
-        Tile tile = Vars.world.tile(buildPlan.x, buildPlan.y);
-        return tile != null && tile.build != null && tile.block() == buildPlan.block && tile.team() == Vars.player.team();
-    }
-
-    private static boolean alreadyBuilt(Seq<BuildPlan> seq, CoreBlock.CoreBuild coreBuild) {
-        Block block = null;
-        int i = 0;
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            Object next = it.next();
-            if (((BuildPlan) next).block.consumers.length > 0 && ((BuildPlan) next).block.size >= 2 && !(((BuildPlan) next).block instanceof StorageBlock)) {
-                int i2 = 0;
-                Iterator it2 = seq.iterator();
-                while (it2.hasNext()) {
-                    if (((BuildPlan) it2.next()).block == ((BuildPlan) next).block) {
-                        i2++;
-                    }
-                }
-                if (i2 > i) {
-                    i = i2;
-                    block = ((BuildPlan) next).block;
-                }
-            }
-        }
-        if (block == null) {
-            return false;
-        }
-        int i3 = 0;
-        Iterator it3 = Groups.build.iterator();
-        while (it3.hasNext()) {
-            Building building = (Building) it3.next();
-            if (building.team == Vars.player.team() && building.block == block && building.within(coreBuild, 480.0f)) {
-                i3++;
-            }
-        }
-        return i3 >= i;
-    }
-
-    private static String missing(CoreBlock.CoreBuild coreBuild, Seq<BuildPlan> seq, String str) {
-        int i;
-        if (Vars.state.rules.infiniteResources) {
-            return null;
-        }
-        HashMap hashMap = new HashMap();
-        Iterator it = seq.iterator();
-        while (it.hasNext()) {
-            for (ItemStack itemStack : ((BuildPlan) it.next()).block.requirements) {
-                hashMap.merge(itemStack.item, Integer.valueOf(Mathf.ceil(r0.amount * Vars.state.rules.buildCostMultiplier)), (v0, v1) -> {
-                    return Integer.sum(v0, v1);
-                });
-            }
-        }
-        for (Map.Entry entry : hashMap.entrySet()) {
-            if (((Integer) entry.getValue()).intValue() > coreBuild.storageCapacity) {
-                return ((Item) entry.getKey()).localizedName + " (precisa " + entry.getValue() + " > capacidade " + coreBuild.storageCapacity + " do nucleo)";
-            }
-        }
-        HashMap hashMap2 = new HashMap();
-        if (str != null && !str.isEmpty()) {
-            for (String str2 : str.split(";")) {
-                String[] split = str2.split(":");
-                Item item = Vars.content.item(split[0]);
-                if (item != null) {
-                    hashMap2.put(item, Integer.valueOf(Integer.parseInt(split[1])));
-                }
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry entry2 : hashMap.entrySet()) {
-            int i2 = coreBuild.items.get((Item) entry2.getKey());
-            Integer num = (Integer) hashMap2.get(entry2.getKey());
-            int intValue = ((Integer) entry2.getValue()).intValue() + (num == null ? 0 : num.intValue());
-            if (i2 < intValue) {
-                sb.append(((Item) entry2.getKey()).localizedName).append(' ').append(intValue - i2).append("  ");
-            }
-        }
-        for (Map.Entry entry3 : hashMap2.entrySet()) {
-            if (!hashMap.containsKey(entry3.getKey()) && (i = coreBuild.items.get((Item) entry3.getKey())) < ((Integer) entry3.getValue()).intValue()) {
-                sb.append(((Item) entry3.getKey()).localizedName).append(' ').append(((Integer) entry3.getValue()).intValue() - i).append(" (alimentacao)  ");
-            }
-        }
-        if (sb.length() == 0) {
-            return null;
-        }
-        return sb.toString().trim();
-    }
-
-    private static void toast(String str) {
-        if ((str.equals(lastToast) && Time.time - lastToastAt < 1800.0f) || Time.time - lastToastAt < 240.0f) {
-            return;
-        }
-        lastToast = str;
-        lastToastAt = Time.time;
-        Log.info("[Lunarians] " + str);
-        if (Vars.ui != null) {
-            Vars.ui.showInfoToast(str, 4.0f);
-        }
-    }
+              b3++;
+              continue;
+            } 
+            if (buildPlan.block == Blocks.unloader)
+              b4++; 
+          } 
+          if (!bool1 && (!bool ? (b4 == 0) : (b3 == 0)) && (
+            !paramBoolean || bool || b4 >= b1)) {
+            int i2 = ringCovered(seq2, n, i1, arrayList);
+            float f1 = (arrayOfInt[0] + arrayOfInt[2]) / 2.0F + n;
+            float f2 = (arrayOfInt[1] + arrayOfInt[3]) / 2.0F + i1;
+            float f3 = b3 * 100.0F + b4 * 10.0F - 3.0F * Math.max(0, i2 - b3 - b4) - Mathf.dst(f1, f2, paramUnit.tileX(), paramUnit.tileY()) * 0.01F;
+            if (f3 > f) {
+              boolean bool2 = true;
+              for (BuildPlan buildPlan : seq2) {
+                if (Build.validPlace(buildPlan.block, Vars.player.team(), buildPlan.x + n, buildPlan.y + i1, buildPlan.rotation))
+                  continue; 
+                bool2 = false;
+              } 
+              if (bool2) {
+                f = f3;
+                seq1 = new Seq();
+                for (BuildPlan buildPlan1 : seq2) {
+                  BuildPlan buildPlan2 = buildPlan1.copy();
+                  buildPlan2.x += n;
+                  buildPlan2.y += i1;
+                  seq1.add(buildPlan2);
+                } 
+              } 
+            } 
+          } 
+        } 
+      } 
+      rotate(seq2);
+    } 
+    return seq1;
+  }
+  
+  private static boolean touches(BuildPlan paramBuildPlan, int paramInt1, int paramInt2, int[] paramArrayOfint) {
+    int[] arrayOfInt = rect(paramBuildPlan.x + paramInt1, paramBuildPlan.y + paramInt2, paramBuildPlan.block.size);
+    boolean bool1 = (arrayOfInt[2] >= paramArrayOfint[0] && arrayOfInt[0] <= paramArrayOfint[2]) ? true : false;
+    boolean bool2 = (arrayOfInt[3] >= paramArrayOfint[1] && arrayOfInt[1] <= paramArrayOfint[3]) ? true : false;
+    return ((bool1 && (arrayOfInt[3] + 1 == paramArrayOfint[1] || arrayOfInt[1] - 1 == paramArrayOfint[3])) || (bool2 && (arrayOfInt[2] + 1 == paramArrayOfint[0] || arrayOfInt[0] - 1 == paramArrayOfint[2])));
+  }
+  
+  private static int[] rect(int paramInt1, int paramInt2, int paramInt3) {
+    int i = -((paramInt3 - 1) / 2);
+    return new int[] { paramInt1 + i, paramInt2 + i, paramInt1 + i + paramInt3 - 1, paramInt2 + i + paramInt3 - 1 };
+  }
+  
+  private static int[] bounds(Seq<BuildPlan> paramSeq) {
+    int i = 1048576;
+    int j = 1048576;
+    int k = -1048576;
+    int m = -1048576;
+    for (BuildPlan buildPlan : paramSeq) {
+      int[] arrayOfInt = rect(buildPlan.x, buildPlan.y, buildPlan.block.size);
+      i = Math.min(i, arrayOfInt[0]);
+      j = Math.min(j, arrayOfInt[1]);
+      k = Math.max(k, arrayOfInt[2]);
+      m = Math.max(m, arrayOfInt[3]);
+    } 
+    return new int[] { i, j, k, m };
+  }
+  
+  private static Seq<BuildPlan> copyAll(Seq<BuildPlan> paramSeq) {
+    Seq<BuildPlan> seq = new Seq();
+    for (BuildPlan buildPlan : paramSeq)
+      seq.add(buildPlan.copy()); 
+    return seq;
+  }
+  
+  private static void rotate(Seq<BuildPlan> paramSeq) {
+    for (Iterator<BuildPlan> iterator = paramSeq.iterator(); iterator.hasNext(); ) {
+      BuildPlan buildPlan = iterator.next();
+      float f1 = (buildPlan.block.size % 2 == 0) ? -0.5F : 0.0F;
+      buildPlan.pointConfig(paramPoint2 -> {
+            float f1 = paramPoint2.x + paramFloat;
+            float f2 = paramPoint2.y + paramFloat;
+            float f3 = f1;
+            f1 = -f2;
+            f2 = f3;
+            paramPoint2.set(Mathf.floor(f1 - paramFloat), Mathf.floor(f2 - paramFloat));
+          });
+      float f2 = buildPlan.x * 8.0F + buildPlan.block.offset;
+      float f3 = buildPlan.y * 8.0F + buildPlan.block.offset;
+      float f4 = f2;
+      f2 = -f3;
+      f3 = f4;
+      buildPlan.x = World.toTile(f2 - buildPlan.block.offset);
+      buildPlan.y = World.toTile(f3 - buildPlan.block.offset);
+      buildPlan.rotation = buildPlan.block.planRotation(Mathf.mod(buildPlan.rotation + 1, 4));
+    } 
+  }
+  
+  private static Schematic find(String paramString) {
+    for (String str : paramString.split("\\|")) {
+      for (Schematic schematic : Vars.schematics.all()) {
+        if (!str.equals(schematic.name()))
+          continue; 
+        return schematic;
+      } 
+    } 
+    return null;
+  }
+  
+  private static boolean isBuilt(BuildPlan paramBuildPlan) {
+    Tile tile = Vars.world.tile(paramBuildPlan.x, paramBuildPlan.y);
+    return (tile != null && tile.build != null && tile.block() == paramBuildPlan.block && tile.team() == Vars.player.team());
+  }
+  
+  private static boolean alreadyBuilt(Seq<BuildPlan> paramSeq, CoreBlock.CoreBuild paramCoreBuild) {
+    Block block = null;
+    byte b1 = 0;
+    for (BuildPlan buildPlan : paramSeq) {
+      if (buildPlan.block.consumers.length <= 0 || buildPlan.block.size < 2 || buildPlan.block instanceof StorageBlock)
+        continue; 
+      byte b = 0;
+      for (BuildPlan buildPlan1 : paramSeq) {
+        if (buildPlan1.block != buildPlan.block)
+          continue; 
+        b++;
+      } 
+      if (b <= b1)
+        continue; 
+      b1 = b;
+      block = buildPlan.block;
+    } 
+    if (block == null)
+      return false; 
+    byte b2 = 0;
+    for (Building building : Groups.build) {
+      if (building.team != Vars.player.team() || building.block != block || !building.within((Position)paramCoreBuild, 480.0F))
+        continue; 
+      b2++;
+    } 
+    return (b2 >= b1);
+  }
+  
+  private static String missing(CoreBlock.CoreBuild paramCoreBuild, Seq<BuildPlan> paramSeq, String paramString) {
+    if (Vars.state.rules.infiniteResources)
+      return null; 
+    HashMap<Object, Object> hashMap1 = new HashMap<>();
+    for (BuildPlan buildPlan : paramSeq) {
+      for (ItemStack itemStack : buildPlan.block.requirements) {
+        int i = Mathf.ceil(itemStack.amount * Vars.state.rules.buildCostMultiplier);
+        hashMap1.merge(itemStack.item, Integer.valueOf(i), Integer::sum);
+      } 
+    } 
+    for (Map.Entry<Object, Object> entry : hashMap1.entrySet()) {
+      if (((Integer)entry.getValue()).intValue() <= paramCoreBuild.storageCapacity)
+        continue; 
+      return ((Item)entry.getKey()).localizedName + " (precisa " + entry.getValue() + " > capacidade " + paramCoreBuild.storageCapacity + " do nucleo)";
+    } 
+    HashMap<Object, Object> hashMap2 = new HashMap<>();
+    if (paramString != null && !paramString.isEmpty())
+      for (String str : paramString.split(";")) {
+        String[] arrayOfString = str.split(":");
+        Item item = Vars.content.item(arrayOfString[0]);
+        if (item != null)
+          hashMap2.put(item, Integer.valueOf(Integer.parseInt(arrayOfString[1]))); 
+      }  
+    StringBuilder stringBuilder = new StringBuilder();
+    for (Map.Entry<Object, Object> entry : hashMap1.entrySet()) {
+      int i = paramCoreBuild.items.get((Item)entry.getKey());
+      Integer integer = (Integer)hashMap2.get(entry.getKey());
+      int j = ((Integer)entry.getValue()).intValue() + ((integer == null) ? 0 : integer.intValue());
+      if (i >= j)
+        continue; 
+      stringBuilder.append(((Item)entry.getKey()).localizedName).append(' ').append(j - i).append("  ");
+    } 
+    for (Map.Entry<Object, Object> entry : hashMap2.entrySet()) {
+      if (hashMap1.containsKey(entry.getKey()))
+        continue; 
+      int i = paramCoreBuild.items.get((Item)entry.getKey());
+      if (i >= ((Integer)entry.getValue()).intValue())
+        continue; 
+      stringBuilder.append(((Item)entry.getKey()).localizedName).append(' ').append(((Integer)entry.getValue()).intValue() - i).append(" (alimentacao)  ");
+    } 
+    return (stringBuilder.length() == 0) ? null : stringBuilder.toString().trim();
+  }
+  
+  private static void toast(String paramString) {
+    if (paramString.equals(lastToast) && Time.time - lastToastAt < 1800.0F)
+      return; 
+    if (Time.time - lastToastAt < 240.0F)
+      return; 
+    lastToast = paramString;
+    lastToastAt = Time.time;
+    Log.info("[Lunarians] " + paramString);
+    if (Vars.ui != null)
+      Vars.ui.showInfoToast(paramString, 4.0F); 
+  }
+  
+  private static String lastToast = "";
+  
+  private static float lastToastAt = -999.0F;
+  
+  private static boolean energyStep = false;
+  
+  private static int stuckRetries = 0;
+  
+  private static boolean camHeld = false;
+  
+  private static boolean prevDetach = false;
+  
+  private enum Phase {
+    NEXT, MOVE, BUILD, GRID, DONE;
+  }
 }

@@ -8,7 +8,6 @@ import arc.util.Log;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import mindustry.Vars;
 import mindustry.content.Blocks;
@@ -17,1459 +16,1438 @@ import mindustry.gen.Unit;
 import mindustry.type.Item;
 import mindustry.world.Block;
 import mindustry.world.Tile;
-import mindustry.world.blocks.distribution.Conveyor;
 import mindustry.world.blocks.environment.Floor;
 import mindustry.world.blocks.production.Drill;
-import mindustry.world.blocks.production.GenericCrafter;
-import mindustry.world.blocks.storage.CoreBlock;
-import mindustry.world.blocks.storage.Unloader;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/AutoDrill.class */
 public class AutoDrill {
-    private static boolean errorLogged;
-    public static int lastCount;
-    public static boolean dryRun;
-    public static boolean quiet;
-    public static boolean limitOn;
-    public static float limitX;
-    public static float limitY;
-    public static float limitR;
-    private static boolean failedNoneFit;
-    private static final int[] DX = {1, 0, -1, 0};
-    private static final int[] DY = {0, 1, 0, -1};
-    public static int isoOverride = -1;
-    public static final Seq<BuildPlan> lastPlans = new Seq<>();
-    public static final IntSeq lastDrillTiles = new IntSeq();
-    public static int lastHub = -1;
-
-    static boolean inLimit(int i, int i2) {
-        return !limitOn || Mathf.dst((float) i, (float) i2, limitX, limitY) <= limitR;
-    }
-
-    static boolean crowded(int i, int i2, int i3, int i4) {
+  private static final int[] DX = new int[] { 1, 0, -1, 0 };
+  
+  private static final int[] DY = new int[] { 0, 1, 0, -1 };
+  
+  private static boolean errorLogged;
+  
+  public static final IntSeq lastDrillTiles;
+  
+  public static int lastCount;
+  
+  public static int lastHub;
+  
+  public static boolean dryRun;
+  
+  public static boolean quiet;
+  
+  public static final Seq<BuildPlan> lastPlans;
+  
+  public static boolean limitOn;
+  
+  public static float limitX;
+  
+  public static float limitY;
+  
+  public static float limitR;
+  
+  static boolean inLimit(int paramInt1, int paramInt2) {
+    return (!limitOn || Mathf.dst(paramInt1, paramInt2, limitX, limitY) <= limitR);
+  }
+  
+  static boolean crowded(int paramInt1, int paramInt2, int paramInt3, int paramInt4) {
+    for (int i = paramInt2 - paramInt4; i <= paramInt2 + paramInt3 - 1 + paramInt4; i++) {
+      for (int j = paramInt1 - paramInt4; j <= paramInt1 + paramInt3 - 1 + paramInt4; ) {
         Tile tile;
-        for (int i5 = i2 - i4; i5 <= ((i2 + i3) - 1) + i4; i5++) {
-            for (int i6 = i - i4; i6 <= ((i + i3) - 1) + i4; i6++) {
-                if (Vars.world.tiles.in(i6, i5) && (tile = Vars.world.tile(i6, i5)) != null && tile.build != null && tile.build.block != null && !(tile.build.block instanceof CoreBlock)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    static boolean nextToDrill(int i, int i2) {
-        for (int i3 = 0; i3 < 4; i3++) {
-            Tile tile = Vars.world.tile(i + DX[i3], i2 + DY[i3]);
-            if (tile != null && tile.build != null && (tile.build.block instanceof Drill)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    static boolean floorOre(Tile tile) {
-        if (tile == null) {
-            return false;
-        }
-        return tile.overlay() == null || tile.overlay().itemDrop == null;
-    }
-
-    static boolean inFloor(int i, int i2, int i3, int i4) {
-        return (limitOn && floorOre(Vars.world.tile(i3, i4)) && Mathf.dst((float) i, (float) i2, (float) i3, (float) i4) > Math.max(2.5f, (((float) Math.sqrt((double) AutoSetConfig.floorMax())) * 0.75f) + 0.5f)) ? false : true;
-    }
-
-    public static void init() {
-    }
-
-    public static void reset() {
-        lastDrillTiles.clear();
-        lastCount = 0;
-        lastHub = -1;
-    }
-
-    public static int count() {
-        return lastCount;
-    }
-
-    public static int generate() {
-        return run();
-    }
-
-    private static int[] exitOrder(int i) {
-        int[] iArr = new int[4];
-        iArr[0] = i;
-        float f = 0.0f;
-        float f2 = 0.0f;
-        try {
-            if (Vars.player != null && Vars.player.closestCore() != null && LunariansSettings.drillStartX != Integer.MIN_VALUE) {
-                f = Vars.player.closestCore().tileX() - LunariansSettings.drillStartX;
-                f2 = Vars.player.closestCore().tileY() - LunariansSettings.drillStartY;
-            }
-        } catch (Throwable th) {
-        }
-        boolean[] zArr = new boolean[4];
-        zArr[i] = true;
-        for (int i2 = 1; i2 < 4; i2++) {
-            int i3 = -1;
-            float f3 = -3.4028235E38f;
-            for (int i4 = 0; i4 < 4; i4++) {
-                if (!zArr[i4]) {
-                    float f4 = (DX[i4] * f) + (DY[i4] * f2);
-                    if (f4 > f3) {
-                        f3 = f4;
-                        i3 = i4;
-                    }
-                }
-            }
-            zArr[i3] = true;
-            iArr[i2] = i3;
-        }
-        return iArr;
-    }
-
-    /* JADX WARN: Finally extract failed */
-    public static int generateWithConveyor() {
-        Seq<BuildPlan> planRoute;
-        if (Vars.headless || Vars.player == null || Vars.state == null || !Vars.state.isGame()) {
-            return 0;
-        }
-        int i = LunariansSettings.drillExitDir & 3;
-        try {
-            try {
-                Unit unit = Vars.player.unit();
-                if (unit == null || !unit.canBuild()) {
-                    toast(LunariansI18n.get("cv_need_builder"));
-                    LunariansSettings.drillExitDir = i;
-                    dryRun = false;
-                    return 0;
-                }
-                boolean[] reservedFromPlans = AutoConnectConveyor.reservedFromPlans(unit);
-                int[] exitOrder = exitOrder(i);
-                int width = Vars.world.width();
-                for (int i2 : exitOrder) {
-                    LunariansSettings.drillExitDir = i2;
-                    dryRun = true;
-                    try {
-                        int generateInner = generateInner();
-                        dryRun = false;
-                        if (generateInner <= 0) {
-                            LunariansSettings.drillExitDir = i;
-                            dryRun = false;
-                            return 0;
-                        }
-                        if (lastHub >= 0) {
-                            boolean[] zArr = (boolean[]) reservedFromPlans.clone();
-                            for (int i3 = 0; i3 < lastPlans.size; i3++) {
-                                AutoConnectConveyor.markPlan((BuildPlan) lastPlans.get(i3), zArr);
-                            }
-                            int i4 = (lastHub % width) + DX[i2];
-                            int i5 = (lastHub / width) + DY[i2];
-                            if (Vars.world.tiles.in(i4, i5) && (planRoute = AutoConnectConveyor.planRoute(i4, i5, i2, zArr)) != null) {
-                                for (int i6 = 0; i6 < lastPlans.size; i6++) {
-                                    unit.addBuild((BuildPlan) lastPlans.get(i6), true);
-                                }
-                                for (int i7 = 0; i7 < planRoute.size; i7++) {
-                                    unit.addBuild((BuildPlan) planRoute.get(i7), true);
-                                }
-                                if (!quiet) {
-                                    toast(LunariansI18n.get("dr_summary", String.valueOf(generateInner), String.valueOf(planRoute.size)));
-                                }
-                                LunariansSettings.drillExitDir = i;
-                                dryRun = false;
-                                return generateInner;
-                            }
-                        }
-                    } catch (Throwable th) {
-                        dryRun = false;
-                        throw th;
-                    }
-                }
-                if (!quiet) {
-                    toast(LunariansI18n.get("cv_no_path"));
-                }
-                LunariansSettings.drillExitDir = i;
-                dryRun = false;
-                return 0;
-            } catch (Throwable th2) {
-                if (!errorLogged) {
-                    errorLogged = true;
-                    Log.err("[Lunarians] AutoDrill+Conveyor error", th2);
-                }
-                LunariansSettings.drillExitDir = i;
-                dryRun = false;
-                return 0;
-            }
-        } catch (Throwable th3) {
-            LunariansSettings.drillExitDir = i;
-            dryRun = false;
-            throw th3;
-        }
-    }
-
-    private static int run() {
-        if (Vars.headless || Vars.player == null || Vars.state == null || !Vars.state.isGame()) {
-            return 0;
-        }
-        try {
-            return generateInner();
-        } catch (Throwable th) {
-            if (!errorLogged) {
-                errorLogged = true;
-                Log.err("[Lunarians] AutoDrill error", th);
-                return 0;
-            }
-            return 0;
-        }
-    }
-
-    private static Block resolveDrill() {
-        String str = LunariansSettings.drillBlock;
-        if (str == null || str.isEmpty()) {
-            str = "mechanical-drill";
-        }
-        Block block = Vars.content.block(str);
-        if (block instanceof Drill) {
-            return block;
-        }
-        return Blocks.mechanicalDrill;
-    }
-
-    private static Block resolveConveyor() {
-        String str = LunariansSettings.conveyorBlock;
-        if (str == null || str.isEmpty()) {
-            str = "conveyor";
-        }
-        Block block = Vars.content.block(str);
-        if (block instanceof Conveyor) {
-            return block;
-        }
-        return Blocks.conveyor;
-    }
-
-    private static Item oreAt(Tile tile) {
-        if (tile == null) {
-            return null;
-        }
-        try {
-            if (tile.drop() != null) {
-                return tile.drop();
-            }
-        } catch (Throwable th) {
-        }
-        Floor overlay = tile.overlay() != null ? tile.overlay() : tile.floor();
-        if (overlay != null && overlay.itemDrop != null) {
-            return overlay.itemDrop;
-        }
-        return null;
-    }
-
-    private static boolean sameOre(Tile tile, Item item) {
-        Item oreAt = oreAt(tile);
-        return oreAt != null && oreAt == item;
-    }
-
-    private static boolean free(int i, int i2, boolean[] zArr, int i3, int i4) {
-        Tile tile;
-        if (!Vars.world.tiles.in(i, i2) || zArr[(i2 * i3) + i] || (tile = Vars.world.tile(i, i2)) == null || tile.solid()) {
-            return false;
-        }
-        return tile.build == null || tile.build.block == null || !tile.build.block.solid;
-    }
-
-    private static boolean freeConv(int i, int i2, boolean[] zArr, int i3, int i4) {
-        Tile tile;
-        if (!Vars.world.tiles.in(i, i2) || zArr[(i2 * i3) + i] || (tile = Vars.world.tile(i, i2)) == null) {
-            return false;
-        }
-        if (tile.build != null && tile.build.block != null && tile.build.block.solid) {
-            return false;
-        }
-        if (!limitOn || (tile.build == null && !nextToDrill(i, i2))) {
-            return (tile.block() != null && tile.block().solid && tile.block().isStatic()) ? false : true;
-        }
-        return false;
-    }
-
-    private static int generateInner() {
-        failedNoneFit = false;
-        int generateInner2 = generateInner2(true);
-        if (generateInner2 <= 0 && failedNoneFit) {
-            failedNoneFit = false;
-            generateInner2 = generateInner2(false);
-        }
-        return generateInner2;
-    }
-
-    /* JADX WARN: Multi-variable type inference failed */
-    private static int generateInner2(boolean z) {
-        int[] iArr;
-        lastHub = -1;
-        int i = LunariansSettings.drillStartX;
-        int i2 = LunariansSettings.drillStartY;
-        if (i == Integer.MIN_VALUE || i2 == Integer.MIN_VALUE) {
-            toast(LunariansI18n.get("dr_set_ore"));
-            return 0;
-        }
-        Tile tile = Vars.world.tile(i, i2);
-        Item oreAt = oreAt(tile);
-        if (oreAt == null) {
-            toast(LunariansI18n.get("dr_no_ore"));
-            return 0;
-        }
-        Drill resolveDrillFor = resolveDrillFor(oreAt);
-        Block resolveConveyor = resolveConveyor();
-        if (!(resolveDrillFor instanceof Drill) || resolveConveyor == null) {
-            toast(LunariansI18n.get("dr_invalid"));
-            return 0;
-        }
-        if (resolveDrillFor.tier < oreAt.hardness) {
-            toast(pt() ? "Nenhuma drill disponível consegue minerar " + oreAt.localizedName : "No available drill can mine " + oreAt.localizedName);
-            return 0;
-        }
-        int i3 = ((Block) resolveDrillFor).size;
-        int max = Math.max(16, LunariansSettings.drillMaxTiles);
-        if (limitOn && floorOre(tile)) {
-            max = Math.min(max, AutoSetConfig.floorMax());
-        }
-        int max2 = Math.max(1, LunariansSettings.drillMinOres);
-        int i4 = max2;
-        int i5 = ((i3 * i3) + 1) / 2;
-        boolean z2 = false;
-        if (limitOn && z && i5 > max2) {
-            i4 = i5;
-            z2 = true;
-        }
-        int i6 = LunariansSettings.drillExitDir & 3;
-        boolean z3 = LunariansSettings.drillLayoutMode == 1;
-        Unit unit = Vars.player.unit();
-        if (unit == null || !unit.canBuild()) {
-            toast(LunariansI18n.get("cv_need_builder"));
-            return 0;
-        }
-        int width = Vars.world.width();
-        int height = Vars.world.height();
-        boolean[] zArr = new boolean[width * height];
-        IntSeq intSeq = new IntSeq();
-        IntQueue intQueue = new IntQueue();
-        int i7 = (i2 * width) + i;
-        intQueue.addLast(i7);
-        zArr[i7] = true;
-        while (!intQueue.isEmpty() && intSeq.size < max) {
-            int removeFirst = intQueue.removeFirst();
-            intSeq.add(removeFirst);
-            int i8 = removeFirst % width;
-            int i9 = removeFirst / width;
-            for (int i10 = 0; i10 < 4; i10++) {
-                int i11 = i8 + DX[i10];
-                int i12 = i9 + DY[i10];
-                if (Vars.world.tiles.in(i11, i12)) {
-                    int i13 = (i12 * width) + i11;
-                    if (!zArr[i13] && sameOre(Vars.world.tile(i11, i12), oreAt) && inLimit(i11, i12) && inFloor(i11, i12, i, i2)) {
-                        zArr[i13] = true;
-                        intQueue.addLast(i13);
-                    }
-                }
-            }
-        }
-        if (intSeq.isEmpty()) {
-            toast(LunariansI18n.get("dr_empty"));
-            return 0;
-        }
-        int i14 = Integer.MAX_VALUE;
-        int i15 = Integer.MAX_VALUE;
-        int i16 = 0;
-        int i17 = 0;
-        for (int i18 = 0; i18 < intSeq.size; i18++) {
-            int i19 = intSeq.get(i18);
-            int i20 = i19 % width;
-            int i21 = i19 / width;
-            i14 = Math.min(i14, i20);
-            i15 = Math.min(i15, i21);
-            i16 = Math.max(i16, i20);
-            i17 = Math.max(i17, i21);
-        }
-        boolean[] reservedFromPlans = limitOn ? AutoConnectConveyor.reservedFromPlans(unit) : new boolean[width * height];
-        boolean[] zArr2 = new boolean[width * height];
-        Seq seq = new Seq();
-        lastDrillTiles.clear();
-        IntSeq intSeq2 = new IntSeq();
-        boolean z4 = i6 == 1 || i6 == 3;
-        int i22 = 0;
-        int i23 = 0;
-        if (LunariansSettings.drillPerfect) {
-            int i24 = -1;
-            int i25 = Integer.MAX_VALUE;
-            for (int i26 = 0; i26 <= i3; i26++) {
-                for (int i27 = 0; i27 <= i3; i27++) {
-                    int[] scanGrid = scanGrid(z4, z3, i26, i27, i3, i14, i15, i16, i17, i4, oreAt, zArr, (boolean[]) reservedFromPlans.clone(), (boolean[]) zArr2.clone(), width, height, resolveDrillFor, new Seq(), new IntSeq(), new IntSeq());
-                    if (scanGrid[0] != 0 && (scanGrid[1] > i24 || (scanGrid[1] == i24 && scanGrid[0] < i25))) {
-                        i24 = scanGrid[1];
-                        i25 = scanGrid[0];
-                        i22 = i26;
-                        i23 = i27;
-                    }
-                }
-            }
-        }
-        int i28 = scanGrid(z4, z3, i22, i23, i3, i14, i15, i16, i17, i4, oreAt, zArr, reservedFromPlans, zArr2, width, height, resolveDrillFor, seq, lastDrillTiles, intSeq2)[0];
-        if (LunariansSettings.drillPerfect && i28 > 0) {
-            i28 += fillGaps(z4, i3, i4, oreAt, zArr, reservedFromPlans, zArr2, width, height, resolveDrillFor, seq, lastDrillTiles, intSeq2);
-        }
-        if (i28 == 0) {
-            if (z2) {
-                failedNoneFit = true;
-                return 0;
-            }
-            toast(LunariansI18n.get("dr_none_fit"));
-            return 0;
-        }
-        int i29 = Integer.MAX_VALUE;
-        int i30 = Integer.MAX_VALUE;
-        int i31 = 0;
-        int i32 = 0;
-        for (int i33 = 0; i33 < lastDrillTiles.size; i33++) {
-            int i34 = lastDrillTiles.get(i33);
-            int i35 = i34 % width;
-            int i36 = i34 / width;
-            i29 = Math.min(i29, i35);
-            i30 = Math.min(i30, i36);
-            i31 = Math.max(i31, (i35 + i3) - 1);
-            i32 = Math.max(i32, (i36 + i3) - 1);
-        }
-        int i37 = 0;
-        if (i6 == 1 || i6 == 3) {
-            int i38 = i29 - 1;
-            int i39 = i31 + 1;
-            if (i38 >= 0 && !intSeq2.contains(i38)) {
-                intSeq2.add(i38);
-            }
-            if (i39 < width && !intSeq2.contains(i39)) {
-                intSeq2.add(i39);
-            }
-        } else {
-            int i40 = i30 - 1;
-            int i41 = i32 + 1;
-            if (i40 >= 0 && !intSeq2.contains(i40)) {
-                intSeq2.add(i40);
-            }
-            if (i41 < height && !intSeq2.contains(i41)) {
-                intSeq2.add(i41);
-            }
-        }
-        if (i6 == 1 || i6 == 3) {
-            for (int i42 = 0; i42 < intSeq2.size; i42++) {
-                int i43 = intSeq2.get(i42);
-                for (int i44 = i30; i44 <= i32; i44++) {
-                    if (freeConv(i43, i44, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i43, i44, i6, resolveConveyor));
-                        reservedFromPlans[(i44 * width) + i43] = true;
-                        i37++;
-                    }
-                }
-            }
-        } else {
-            for (int i45 = 0; i45 < intSeq2.size; i45++) {
-                int i46 = intSeq2.get(i45);
-                for (int i47 = i29; i47 <= i31; i47++) {
-                    if (freeConv(i47, i46, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i47, i46, i6, resolveConveyor));
-                        reservedFromPlans[(i46 * width) + i47] = true;
-                        i37++;
-                    }
-                }
-            }
-        }
-        for (int i48 = 0; i48 < lastDrillTiles.size; i48++) {
-            int i49 = lastDrillTiles.get(i48);
-            int[] pickFace = pickFace(i49 % width, i49 / width, i3, i6, intSeq2, reservedFromPlans, zArr2, width, height);
-            if (pickFace != null) {
-                int i50 = pickFace[0];
-                int i51 = pickFace[1];
-                int i52 = pickFace[2];
-                if (freeConv(i50, i51, reservedFromPlans, width, height)) {
-                    seq.add(new BuildPlan(i50, i51, i52, resolveConveyor));
-                    reservedFromPlans[(i51 * width) + i50] = true;
-                    i37++;
-                }
-            }
-        }
-        for (int i53 = 0; i53 < lastDrillTiles.size; i53++) {
-            int i54 = lastDrillTiles.get(i53);
-            int i55 = i54 % width;
-            int i56 = i54 / width;
-            if (!hasAdjConv(i55, i56, i3, reservedFromPlans, width)) {
-                int[] iArr2 = new int[1];
-                if (i6 == 0) {
-                    iArr = new int[]{i55 + i3, i56, 0};
-                } else if (i6 == 1) {
-                    iArr = new int[]{i55, i56 + i3, 1};
-                } else if (i6 == 2) {
-                    iArr = new int[]{i55 - 1, i56, 2};
-                } else {
-                    iArr = new int[]{i55, i56 - 1, 3};
-                }
-                iArr2[0] = iArr;
-                IntSeq intSeq3 = new IntSeq();
-                IntSeq intSeq4 = new IntSeq();
-                IntSeq intSeq5 = new IntSeq();
-                for (int i57 = 0; i57 < i3; i57++) {
-                    if (i6 == 0) {
-                        intSeq3.add(i55 + i3);
-                        intSeq4.add(i56 + i57);
-                        intSeq5.add(0);
-                    } else if (i6 == 1) {
-                        intSeq3.add(i55 + i57);
-                        intSeq4.add(i56 + i3);
-                        intSeq5.add(1);
-                    } else if (i6 == 2) {
-                        intSeq3.add(i55 - 1);
-                        intSeq4.add(i56 + i57);
-                        intSeq5.add(2);
-                    } else {
-                        intSeq3.add(i55 + i57);
-                        intSeq4.add(i56 - 1);
-                        intSeq5.add(3);
-                    }
-                }
-                for (int i58 = 0; i58 < i3; i58++) {
-                    intSeq3.add(i55 + i3);
-                    intSeq4.add(i56 + i58);
-                    intSeq5.add(0);
-                    intSeq3.add(i55 - 1);
-                    intSeq4.add(i56 + i58);
-                    intSeq5.add(2);
-                    intSeq3.add(i55 + i58);
-                    intSeq4.add(i56 + i3);
-                    intSeq5.add(1);
-                    intSeq3.add(i55 + i58);
-                    intSeq4.add(i56 - 1);
-                    intSeq5.add(3);
-                }
-                int i59 = 0;
-                while (true) {
-                    if (i59 < intSeq3.size) {
-                        int i60 = intSeq3.get(i59);
-                        int i61 = intSeq4.get(i59);
-                        int i62 = intSeq5.get(i59);
-                        if (!freeConv(i60, i61, reservedFromPlans, width, height)) {
-                            i59++;
-                        } else {
-                            seq.add(new BuildPlan(i60, i61, i62, resolveConveyor));
-                            reservedFromPlans[(i61 * width) + i60] = true;
-                            i37++;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        for (int i63 = 0; i63 < lastDrillTiles.size; i63++) {
-            int i64 = lastDrillTiles.get(i63);
-            int i65 = i64 % width;
-            int i66 = i64 / width;
-            if (i6 == 1 || i6 == 3) {
-                for (int i67 = 0; i67 < i3; i67++) {
-                    int i68 = i65 + i3;
-                    int i69 = i66 + i67;
-                    if (freeConv(i68, i69, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i68, i69, 0, resolveConveyor));
-                        reservedFromPlans[(i69 * width) + i68] = true;
-                        i37++;
-                    }
-                    int i70 = i65 - 1;
-                    int i71 = i66 + i67;
-                    if (freeConv(i70, i71, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i70, i71, 2, resolveConveyor));
-                        reservedFromPlans[(i71 * width) + i70] = true;
-                        i37++;
-                    }
-                }
-            } else {
-                for (int i72 = 0; i72 < i3; i72++) {
-                    int i73 = i65 + i72;
-                    int i74 = i66 + i3;
-                    if (freeConv(i73, i74, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i73, i74, 1, resolveConveyor));
-                        reservedFromPlans[(i74 * width) + i73] = true;
-                        i37++;
-                    }
-                    int i75 = i65 + i72;
-                    int i76 = i66 - 1;
-                    if (freeConv(i75, i76, reservedFromPlans, width, height)) {
-                        seq.add(new BuildPlan(i75, i76, 3, resolveConveyor));
-                        reservedFromPlans[(i76 * width) + i75] = true;
-                        i37++;
-                    }
-                }
-            }
-        }
-        if (i6 == 1 || i6 == 3) {
-            for (int i77 = 0; i77 < lastDrillTiles.size; i77++) {
-                int i78 = lastDrillTiles.get(i77);
-                int i79 = i78 % width;
-                int i80 = i78 / width;
-                int i81 = Integer.MIN_VALUE;
-                int i82 = Integer.MAX_VALUE;
-                for (int i83 = 0; i83 < intSeq2.size; i83++) {
-                    int i84 = intSeq2.get(i83);
-                    int abs = Math.abs(i84 - (i79 + (i3 / 2)));
-                    if (abs < i82) {
-                        i82 = abs;
-                        i81 = i84;
-                    }
-                }
-                if (i81 != Integer.MIN_VALUE) {
-                    for (int i85 = 0; i85 < i3; i85++) {
-                        int i86 = i80 + i85;
-                        int i87 = i81 > i79 ? i79 + i3 : i79 - 1;
-                        int i88 = i81 > i79 ? 1 : -1;
-                        int i89 = i87;
-                        while (true) {
-                            int i90 = i89;
-                            if (i90 != i81 && freeConv(i90, i86, reservedFromPlans, width, height)) {
-                                seq.add(new BuildPlan(i90, i86, i88 > 0 ? 0 : 2, resolveConveyor));
-                                reservedFromPlans[(i86 * width) + i90] = true;
-                                i37++;
-                                if (Math.abs(i90 - i87) > 6) {
-                                    break;
-                                }
-                                i89 = i90 + i88;
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            for (int i91 = 0; i91 < lastDrillTiles.size; i91++) {
-                int i92 = lastDrillTiles.get(i91);
-                int i93 = i92 % width;
-                int i94 = i92 / width;
-                int i95 = Integer.MIN_VALUE;
-                int i96 = Integer.MAX_VALUE;
-                for (int i97 = 0; i97 < intSeq2.size; i97++) {
-                    int i98 = intSeq2.get(i97);
-                    int abs2 = Math.abs(i98 - (i94 + (i3 / 2)));
-                    if (abs2 < i96) {
-                        i96 = abs2;
-                        i95 = i98;
-                    }
-                }
-                if (i95 != Integer.MIN_VALUE) {
-                    for (int i99 = 0; i99 < i3; i99++) {
-                        int i100 = i93 + i99;
-                        int i101 = i95 > i94 ? i94 + i3 : i94 - 1;
-                        int i102 = i95 > i94 ? 1 : -1;
-                        int i103 = i101;
-                        while (true) {
-                            int i104 = i103;
-                            if (i104 != i95 && freeConv(i100, i104, reservedFromPlans, width, height)) {
-                                seq.add(new BuildPlan(i100, i104, i102 > 0 ? 1 : 3, resolveConveyor));
-                                reservedFromPlans[(i104 * width) + i100] = true;
-                                i37++;
-                                if (Math.abs(i104 - i101) > 6) {
-                                    break;
-                                }
-                                i103 = i104 + i102;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        int i105 = (i29 + i31) / 2;
-        int i106 = (i30 + i32) / 2;
-        if ((i6 == 1 || i6 == 3) && intSeq2.size > 0) {
-            int i107 = intSeq2.get(0);
-            int abs3 = Math.abs(i107 - i105);
-            for (int i108 = 1; i108 < intSeq2.size; i108++) {
-                int i109 = intSeq2.get(i108);
-                if (Math.abs(i109 - i105) < abs3) {
-                    abs3 = Math.abs(i109 - i105);
-                    i107 = i109;
-                }
-            }
-            i105 = i107;
-        }
-        if ((i6 == 0 || i6 == 2) && intSeq2.size > 0) {
-            int i110 = intSeq2.get(0);
-            int abs4 = Math.abs(i110 - i106);
-            for (int i111 = 1; i111 < intSeq2.size; i111++) {
-                int i112 = intSeq2.get(i111);
-                if (Math.abs(i112 - i106) < abs4) {
-                    abs4 = Math.abs(i112 - i106);
-                    i110 = i112;
-                }
-            }
-            i106 = i110;
-        }
-        if (i6 == 1) {
-            int i113 = i32 + 1;
-            if (i113 < height) {
-                int i114 = i29;
-                while (i114 <= i31) {
-                    if (freeConv(i114, i113, reservedFromPlans, width, height)) {
-                        boolean z5 = false;
-                        for (int i115 = i30; i115 <= i32 && !z5; i115++) {
-                            if (zArr2[(i115 * width) + i114] || reservedFromPlans[(i115 * width) + i114]) {
-                                z5 = true;
-                            }
-                        }
-                        if (z5) {
-                            seq.add(new BuildPlan(i114, i113, i114 == i105 ? 1 : i114 < i105 ? 0 : 2, resolveConveyor));
-                            reservedFromPlans[(i113 * width) + i114] = true;
-                            i37++;
-                        }
-                    }
-                    i114++;
-                }
-                if (freeConv(i105, i113 + 1, reservedFromPlans, width, height)) {
-                    seq.add(new BuildPlan(i105, i113 + 1, 1, resolveConveyor));
-                    reservedFromPlans[((i113 + 1) * width) + i105] = true;
-                    i37++;
-                    lastHub = ((i113 + 1) * width) + i105;
-                } else {
-                    lastHub = (i113 * width) + i105;
-                }
-            }
-        } else if (i6 == 3) {
-            int i116 = i30 - 1;
-            if (i116 >= 0) {
-                int i117 = i29;
-                while (i117 <= i31) {
-                    if (freeConv(i117, i116, reservedFromPlans, width, height)) {
-                        boolean z6 = false;
-                        for (int i118 = i30; i118 <= i32 && !z6; i118++) {
-                            if (zArr2[(i118 * width) + i117] || reservedFromPlans[(i118 * width) + i117]) {
-                                z6 = true;
-                            }
-                        }
-                        if (z6) {
-                            seq.add(new BuildPlan(i117, i116, i117 == i105 ? 3 : i117 < i105 ? 0 : 2, resolveConveyor));
-                            reservedFromPlans[(i116 * width) + i117] = true;
-                            i37++;
-                        }
-                    }
-                    i117++;
-                }
-                if (freeConv(i105, i116 - 1, reservedFromPlans, width, height)) {
-                    seq.add(new BuildPlan(i105, i116 - 1, 3, resolveConveyor));
-                    reservedFromPlans[((i116 - 1) * width) + i105] = true;
-                    i37++;
-                    lastHub = ((i116 - 1) * width) + i105;
-                } else {
-                    lastHub = (i116 * width) + i105;
-                }
-            }
-        } else if (i6 == 0) {
-            int i119 = i31 + 1;
-            if (i119 < width) {
-                int i120 = i30;
-                while (i120 <= i32) {
-                    if (freeConv(i119, i120, reservedFromPlans, width, height)) {
-                        boolean z7 = false;
-                        for (int i121 = i29; i121 <= i31 && !z7; i121++) {
-                            if (zArr2[(i120 * width) + i121] || reservedFromPlans[(i120 * width) + i121]) {
-                                z7 = true;
-                            }
-                        }
-                        if (z7) {
-                            seq.add(new BuildPlan(i119, i120, i120 == i106 ? 0 : i120 < i106 ? 1 : 3, resolveConveyor));
-                            reservedFromPlans[(i120 * width) + i119] = true;
-                            i37++;
-                        }
-                    }
-                    i120++;
-                }
-                if (freeConv(i119 + 1, i106, reservedFromPlans, width, height)) {
-                    seq.add(new BuildPlan(i119 + 1, i106, 0, resolveConveyor));
-                    reservedFromPlans[(i106 * width) + i119 + 1] = true;
-                    i37++;
-                    lastHub = (i106 * width) + i119 + 1;
-                } else {
-                    lastHub = (i106 * width) + i119;
-                }
-            }
-        } else {
-            int i122 = i29 - 1;
-            if (i122 >= 0) {
-                int i123 = i30;
-                while (i123 <= i32) {
-                    if (freeConv(i122, i123, reservedFromPlans, width, height)) {
-                        boolean z8 = false;
-                        for (int i124 = i29; i124 <= i31 && !z8; i124++) {
-                            if (zArr2[(i123 * width) + i124] || reservedFromPlans[(i123 * width) + i124]) {
-                                z8 = true;
-                            }
-                        }
-                        if (z8) {
-                            seq.add(new BuildPlan(i122, i123, i123 == i106 ? 2 : i123 < i106 ? 1 : 3, resolveConveyor));
-                            reservedFromPlans[(i123 * width) + i122] = true;
-                            i37++;
-                        }
-                    }
-                    i123++;
-                }
-                if (freeConv(i122 - 1, i106, reservedFromPlans, width, height)) {
-                    seq.add(new BuildPlan(i122 - 1, i106, 2, resolveConveyor));
-                    reservedFromPlans[((i106 * width) + i122) - 1] = true;
-                    i37++;
-                    lastHub = ((i106 * width) + i122) - 1;
-                } else {
-                    lastHub = (i106 * width) + i122;
-                }
-            }
-        }
-        if (i6 == 1 || i6 == 3) {
-            int i125 = i6 == 1 ? i32 + 1 : i30 - 1;
-            for (int i126 = 0; i126 < intSeq2.size; i126++) {
-                int i127 = intSeq2.get(i126);
-                if (i6 == 1) {
-                    for (int i128 = i32; i128 <= i125; i128++) {
-                        if (freeConv(i127, i128, reservedFromPlans, width, height)) {
-                            seq.add(new BuildPlan(i127, i128, 1, resolveConveyor));
-                            reservedFromPlans[(i128 * width) + i127] = true;
-                            i37++;
-                        }
-                    }
-                } else {
-                    for (int i129 = i125; i129 <= i30; i129++) {
-                        if (freeConv(i127, i129, reservedFromPlans, width, height)) {
-                            seq.add(new BuildPlan(i127, i129, 3, resolveConveyor));
-                            reservedFromPlans[(i129 * width) + i127] = true;
-                            i37++;
-                        }
-                    }
-                }
-            }
-        } else {
-            int i130 = i6 == 0 ? i31 + 1 : i29 - 1;
-            for (int i131 = 0; i131 < intSeq2.size; i131++) {
-                int i132 = intSeq2.get(i131);
-                if (i6 == 0) {
-                    for (int i133 = i31; i133 <= i130; i133++) {
-                        if (freeConv(i133, i132, reservedFromPlans, width, height)) {
-                            seq.add(new BuildPlan(i133, i132, 0, resolveConveyor));
-                            reservedFromPlans[(i132 * width) + i133] = true;
-                            i37++;
-                        }
-                    }
-                } else {
-                    for (int i134 = i130; i134 <= i29; i134++) {
-                        if (freeConv(i134, i132, reservedFromPlans, width, height)) {
-                            seq.add(new BuildPlan(i134, i132, 2, resolveConveyor));
-                            reservedFromPlans[(i132 * width) + i134] = true;
-                            i37++;
-                        }
-                    }
-                }
-            }
-        }
-        fixRotations(seq, resolveConveyor, width);
-        Seq<BuildPlan> pruneConveyors = pruneConveyors(seq, resolveConveyor, width);
-        int i135 = 0;
-        for (int i136 = 0; i136 < pruneConveyors.size; i136++) {
-            if (((BuildPlan) pruneConveyors.get(i136)).block == resolveConveyor) {
-                i135++;
-            }
-        }
-        Seq<BuildPlan> sanitize = AutoConnectConveyor.sanitize(pruneConveyors);
-        lastPlans.clear();
-        lastPlans.addAll(sanitize);
-        if (!dryRun) {
-            for (int i137 = 0; i137 < sanitize.size; i137++) {
-                BuildPlan buildPlan = (BuildPlan) sanitize.get(i137);
-                if (buildPlan.block instanceof Drill) {
-                    unit.addBuild(buildPlan, true);
-                }
-            }
-            for (int i138 = 0; i138 < sanitize.size; i138++) {
-                BuildPlan buildPlan2 = (BuildPlan) sanitize.get(i138);
-                if (!(buildPlan2.block instanceof Drill)) {
-                    unit.addBuild(buildPlan2, true);
-                }
-            }
-        }
-        lastCount = i28;
-        if (!dryRun && !quiet) {
-            toast(LunariansI18n.get("dr_summary", String.valueOf(i28), String.valueOf(i135)));
-        }
-        return lastCount;
-    }
-
-    private static int[] pickFace(int i, int i2, int i3, int i4, IntSeq intSeq, boolean[] zArr, boolean[] zArr2, int i5, int i6) {
-        int i7;
-        int i8;
-        int i9;
-        int i10;
-        int i11;
-        int i12;
-        if (i4 == 1 || i4 == 3) {
-            int i13 = Integer.MIN_VALUE;
-            int i14 = Integer.MAX_VALUE;
-            for (int i15 = 0; i15 < intSeq.size; i15++) {
-                int i16 = intSeq.get(i15);
-                int abs = Math.abs(i16 - (i + (i3 / 2)));
-                if (abs < i14) {
-                    i14 = abs;
-                    i13 = i16;
-                }
-            }
-            if (i13 != Integer.MIN_VALUE) {
-                int i17 = i13 > i ? i + i3 : i - 1;
-                for (int i18 = 0; i18 < i3; i18++) {
-                    int i19 = i2 + i18;
-                    if (freeConv(i17, i19, zArr, i5, i6)) {
-                        return new int[]{i17, i19, i13 > i ? 0 : 2};
-                    }
-                }
-            }
-            for (int i20 = 0; i20 < i3; i20++) {
-                if (i4 == 1) {
-                    i7 = i + i20;
-                    i8 = i2 + i3;
-                    i9 = 1;
-                } else {
-                    i7 = i + i20;
-                    i8 = i2 - 1;
-                    i9 = 3;
-                }
-                if (freeConv(i7, i8, zArr, i5, i6)) {
-                    return new int[]{i7, i8, i9};
-                }
-            }
-            return null;
-        }
-        int i21 = Integer.MIN_VALUE;
-        int i22 = Integer.MAX_VALUE;
-        for (int i23 = 0; i23 < intSeq.size; i23++) {
-            int i24 = intSeq.get(i23);
-            int abs2 = Math.abs(i24 - (i2 + (i3 / 2)));
-            if (abs2 < i22) {
-                i22 = abs2;
-                i21 = i24;
-            }
-        }
-        if (i21 != Integer.MIN_VALUE) {
-            int i25 = i21 > i2 ? i2 + i3 : i2 - 1;
-            for (int i26 = 0; i26 < i3; i26++) {
-                int i27 = i + i26;
-                if (freeConv(i27, i25, zArr, i5, i6)) {
-                    return new int[]{i27, i25, i21 > i2 ? 1 : 3};
-                }
-            }
-        }
-        for (int i28 = 0; i28 < i3; i28++) {
-            if (i4 == 0) {
-                i10 = i + i3;
-                i11 = i2 + i28;
-                i12 = 0;
-            } else {
-                i10 = i - 1;
-                i11 = i2 + i28;
-                i12 = 2;
-            }
-            if (freeConv(i10, i11, zArr, i5, i6)) {
-                return new int[]{i10, i11, i12};
-            }
-        }
-        return null;
-    }
-
-    private static boolean hasAdjConv(int i, int i2, int i3, boolean[] zArr, int i4) {
-        for (int i5 = 0; i5 < i3; i5++) {
-            for (int i6 = 0; i6 < i3; i6++) {
-                for (int i7 = 0; i7 < 4; i7++) {
-                    int i8 = i + i6 + DX[i7];
-                    int i9 = i2 + i5 + DY[i7];
-                    if (Vars.world.tiles.in(i8, i9) && ((i8 < i || i8 >= i + i3 || i9 < i2 || i9 >= i2 + i3) && zArr[(i9 * i4) + i8])) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean touchesDrill(int i, int i2, boolean[] zArr, int i3, int i4) {
-        for (int i5 = 0; i5 < 4; i5++) {
-            int i6 = i + DX[i5];
-            int i7 = i2 + DY[i5];
-            if (Vars.world.tiles.in(i6, i7) && zArr[(i7 * i3) + i6]) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean canPlaceDrill(int i, int i2, int i3, boolean[] zArr, int i4, int i5) {
-        Tile tile;
-        if (i < 0 || i2 < 0 || i + i3 > i4 || i2 + i3 > i5) {
-            return false;
-        }
-        for (int i6 = 0; i6 < i3; i6++) {
-            for (int i7 = 0; i7 < i3; i7++) {
-                if (zArr[((i2 + i6) * i4) + i + i7] || (tile = Vars.world.tile(i + i7, i2 + i6)) == null) {
-                    return false;
-                }
-                if (tile.solid() && tile.build == null) {
-                    return false;
-                }
-                if (tile.build != null && tile.build.block != null && tile.build.block.solid) {
-                    return false;
-                }
-            }
-        }
-        if (limitOn) {
-            if (crowded(i, i2, i3, isoOverride >= 0 ? isoOverride : AutoSetConfig.spacing())) {
-                return false;
-            }
-        }
+        if (!Vars.world.tiles.in(j, i) || (tile = Vars.world.tile(j, i)) == null || tile.build == null || tile.build.block == null || tile.build.block instanceof mindustry.world.blocks.storage.CoreBlock) {
+          j++;
+          continue;
+        } 
         return true;
-    }
-
-    private static int[] scanGrid(boolean z, boolean z2, int i, int i2, int i3, int i4, int i5, int i6, int i7, int i8, Item item, boolean[] zArr, boolean[] zArr2, boolean[] zArr3, int i9, int i10, Block block, Seq<BuildPlan> seq, IntSeq intSeq, IntSeq intSeq2) {
-        int countOre;
-        int i11 = z ? i4 + i : i5 + i2;
-        int i12 = z ? i5 + i2 : i4 + i;
-        int i13 = z ? i6 : i7;
-        int i14 = z ? i7 : i6;
-        int i15 = z ? i9 : i10;
-        int i16 = 0;
-        int i17 = 0;
-        int i18 = 0;
-        while ((i11 + i3) - 1 <= i13) {
-            boolean z3 = false;
-            int i19 = i12;
-            while (true) {
-                int i20 = i19;
-                if ((i20 + i3) - 1 > i14) {
-                    break;
-                }
-                int i21 = z ? i11 : i20;
-                int i22 = z ? i20 : i11;
-                if (canPlaceDrill(i21, i22, i3, zArr2, i9, i10) && (countOre = countOre(i21, i22, i3, item, zArr, i9)) >= i8) {
-                    seq.add(new BuildPlan(i21 + ((i3 - 1) / 2), i22 + ((i3 - 1) / 2), 0, block));
-                    intSeq.add((i22 * i9) + i21);
-                    mark(i21, i22, i3, zArr2, i9);
-                    mark(i21, i22, i3, zArr3, i9);
-                    i16++;
-                    i17 += countOre;
-                    z3 = true;
-                }
-                i19 = i20 + i3;
-            }
-            if (z3) {
-                i18++;
-                if (z2 && i18 % 2 != 0) {
-                    i11 += i3;
-                } else {
-                    int i23 = i11 + i3;
-                    if (i23 < i15) {
-                        intSeq2.add(i23);
-                    }
-                    i11 += i3 + 1;
-                }
-            } else {
-                i11++;
-            }
-        }
-        return new int[]{i16, i17};
-    }
-
-    private static int fillGaps(boolean z, int i, int i2, Item item, boolean[] zArr, boolean[] zArr2, boolean[] zArr3, int i3, int i4, Block block, Seq<BuildPlan> seq, IntSeq intSeq, IntSeq intSeq2) {
-        int countOre;
-        if (intSeq.size == 0) {
-            return 0;
-        }
-        int i5 = Integer.MAX_VALUE;
-        int i6 = Integer.MAX_VALUE;
-        int i7 = 0;
-        int i8 = 0;
-        for (int i9 = 0; i9 < intSeq.size; i9++) {
-            int i10 = intSeq.get(i9);
-            i5 = Math.min(i5, i10 % i3);
-            i6 = Math.min(i6, i10 / i3);
-            i7 = Math.max(i7, ((i10 % i3) + i) - 1);
-            i8 = Math.max(i8, ((i10 / i3) + i) - 1);
-        }
-        int max = Math.max(1, Math.min(i2, ((i * i) + 2) / 3));
-        int i11 = 0;
-        for (int i12 = 0; i12 < 64; i12++) {
-            int i13 = -1;
-            int i14 = -1;
-            int i15 = 0;
-            for (int i16 = i6; (i16 + i) - 1 <= i8; i16++) {
-                for (int i17 = i5; (i17 + i) - 1 <= i7; i17++) {
-                    int i18 = z ? i17 : i16;
-                    boolean z2 = false;
-                    int i19 = 0;
-                    while (true) {
-                        if (i19 >= intSeq2.size) {
-                            break;
-                        }
-                        int i20 = intSeq2.get(i19);
-                        if (i20 < i18 || i20 > (i18 + i) - 1) {
-                            i19++;
-                        } else {
-                            z2 = true;
-                            break;
-                        }
-                    }
-                    if (!z2 && canPlaceDrill(i17, i16, i, zArr2, i3, i4) && (countOre = countOre(i17, i16, i, item, zArr, i3)) > i15) {
-                        i15 = countOre;
-                        i13 = i17;
-                        i14 = i16;
-                    }
-                }
-            }
-            if (i13 < 0 || i15 < max) {
-                break;
-            }
-            seq.add(new BuildPlan(i13 + ((i - 1) / 2), i14 + ((i - 1) / 2), 0, block));
-            intSeq.add((i14 * i3) + i13);
-            mark(i13, i14, i, zArr2, i3);
-            mark(i13, i14, i, zArr3, i3);
-            i11++;
-        }
-        return i11;
-    }
-
-    private static int countOre(int i, int i2, int i3, Item item, boolean[] zArr, int i4) {
-        int i5 = 0;
-        int i6 = 0;
-        HashMap hashMap = null;
-        for (int i7 = 0; i7 < i3; i7++) {
-            for (int i8 = 0; i8 < i3; i8++) {
-                int i9 = ((i2 + i7) * i4) + i + i8;
-                Tile tile = Vars.world.tile(i + i8, i2 + i7);
-                Item oreAt = oreAt(tile);
-                if (oreAt != null) {
-                    if (oreAt == item) {
-                        i6++;
-                    } else if (limitOn) {
-                        if (hashMap == null) {
-                            hashMap = new HashMap();
-                        }
-                        HashMap hashMap2 = hashMap;
-                        Integer num = (Integer) hashMap.get(oreAt);
-                        hashMap2.put(oreAt, Integer.valueOf(num == null ? 1 : num.intValue() + 1));
-                    }
-                }
-                if (zArr[i9] && sameOre(tile, item)) {
-                    i5++;
-                }
-            }
-        }
-        if (limitOn && hashMap != null) {
-            for (Map.Entry entry : hashMap.entrySet()) {
-                Item item2 = (Item) entry.getKey();
-                int intValue = ((Integer) entry.getValue()).intValue();
-                if (!item2.lowPriority || item.lowPriority) {
-                    if ((!item2.lowPriority && item.lowPriority) || intValue > i6) {
-                        return -1;
-                    }
-                    if (intValue == i6 && item2.id > item.id) {
-                        return -1;
-                    }
-                }
-            }
-        }
-        return i5;
-    }
-
-    private static void mark(int i, int i2, int i3, boolean[] zArr, int i4) {
-        for (int i5 = 0; i5 < i3; i5++) {
-            for (int i6 = 0; i6 < i3; i6++) {
-                zArr[((i2 + i5) * i4) + i + i6] = true;
-            }
-        }
-    }
-
-    private static void fixRotations(Seq<BuildPlan> seq, Block block, int i) {
-        int i2;
-        if (lastHub < 0 || seq == null || seq.isEmpty()) {
-            return;
-        }
-        boolean[] zArr = new boolean[i * Vars.world.height()];
-        int[] iArr = new int[i * Vars.world.height()];
-        Arrays.fill(iArr, -1);
-        for (int i3 = 0; i3 < seq.size; i3++) {
-            Object obj = seq.get(i3);
-            if (((BuildPlan) obj).block == block && (i2 = (((BuildPlan) obj).y * i) + ((BuildPlan) obj).x) >= 0 && i2 < zArr.length) {
-                zArr[i2] = true;
-                iArr[i2] = i3;
-            }
-        }
-        if (!zArr[lastHub]) {
-            return;
-        }
-        int[] iArr2 = new int[zArr.length];
-        Arrays.fill(iArr2, -1);
-        IntQueue intQueue = new IntQueue();
-        intQueue.addLast(lastHub);
-        iArr2[lastHub] = lastHub;
-        while (!intQueue.isEmpty()) {
-            int removeFirst = intQueue.removeFirst();
-            int i4 = removeFirst % i;
-            int i5 = removeFirst / i;
-            for (int i6 = 0; i6 < 4; i6++) {
-                int i7 = i4 + DX[i6];
-                int i8 = i5 + DY[i6];
-                if (Vars.world.tiles.in(i7, i8)) {
-                    int i9 = (i8 * i) + i7;
-                    if (iArr2[i9] < 0 && zArr[i9]) {
-                        iArr2[i9] = removeFirst;
-                        intQueue.addLast(i9);
-                    }
-                }
-            }
-        }
-        for (int i10 = 0; i10 < zArr.length; i10++) {
-            if (zArr[i10] && iArr2[i10] >= 0 && iArr2[i10] != i10) {
-                int i11 = iArr2[i10];
-                int i12 = i10 % i;
-                int i13 = i11 % i;
-                int i14 = i13 > i12 ? 0 : i13 < i12 ? 2 : i11 / i > i10 / i ? 1 : 3;
-                int i15 = iArr[i10];
-                if (i15 >= 0) {
-                    BuildPlan buildPlan = (BuildPlan) seq.get(i15);
-                    seq.set(i15, new BuildPlan(buildPlan.x, buildPlan.y, i14, block));
-                }
-            }
-        }
-    }
-
-    private static Block resolveDrillFor(Item item) {
-        String drillFor;
-        Block block = null;
-        if (limitOn && item != null && (drillFor = AutoSetConfig.drillFor(item.name)) != null && !drillFor.isEmpty()) {
-            Block block2 = Vars.content.block(drillFor);
-            if (block2 instanceof Drill) {
-                block = block2;
-            }
-        }
-        if (block == null) {
-            block = resolveDrill();
-        }
-        if (item != null && (block instanceof Drill) && ((Drill) block).tier < item.hardness) {
-            Block block3 = null;
-            Iterator it = Vars.content.blocks().iterator();
-            while (it.hasNext()) {
-                Block block4 = (Block) it.next();
-                if (block4 instanceof Drill) {
-                    Block block5 = (Drill) block4;
-                    if (((Drill) block5).tier >= item.hardness && (block3 == null || ((Drill) block5).tier < ((Drill) block3).tier || (((Drill) block5).tier == ((Drill) block3).tier && ((Drill) block5).size < ((Drill) block3).size))) {
-                        block3 = block5;
-                    }
-                }
-            }
-            if (block3 != null) {
-                if (!quiet) {
-                    toast(pt() ? block.localizedName + " não minera " + item.localizedName + ": usando " + ((Drill) block3).localizedName : block.localizedName + " cannot mine " + item.localizedName + ": using " + ((Drill) block3).localizedName);
-                }
-                block = block3;
-            }
-        }
-        return block;
-    }
-
-    private static boolean pollutes(Block block) {
-        return (block instanceof Drill) || (block instanceof GenericCrafter) || (block instanceof Unloader);
-    }
-
-    private static void markAround(boolean[] zArr, int i, int i2, int i3, int i4) {
-        for (int i5 = 0; i5 < 4; i5++) {
-            int i6 = i + DX[i5];
-            int i7 = i2 + DY[i5];
-            if (i6 >= 0 && i7 >= 0 && i6 < i3 && i7 < i4) {
-                zArr[(i7 * i3) + i6] = true;
-            }
-        }
-    }
-
-    public static boolean[] reservedForFeed(Unit unit) {
-        boolean[] reservedFromPlans = AutoConnectConveyor.reservedFromPlans(unit);
+      } 
+    } 
+    return false;
+  }
+  
+  static boolean nextToDrill(int paramInt1, int paramInt2) {
+    for (byte b = 0; b < 4; ) {
+      Tile tile = Vars.world.tile(paramInt1 + DX[b], paramInt2 + DY[b]);
+      if (tile == null || tile.build == null || !(tile.build.block instanceof Drill)) {
+        b++;
+        continue;
+      } 
+      return true;
+    } 
+    return false;
+  }
+  
+  static boolean floorOre(Tile paramTile) {
+    if (paramTile == null)
+      return false; 
+    return (paramTile.overlay() == null || (paramTile.overlay()).itemDrop == null);
+  }
+  
+  static boolean inFloor(int paramInt1, int paramInt2, int paramInt3, int paramInt4) {
+    if (!limitOn)
+      return true; 
+    if (!floorOre(Vars.world.tile(paramInt3, paramInt4)))
+      return true; 
+    return (Mathf.dst(paramInt1, paramInt2, paramInt3, paramInt4) <= Math.max(2.5F, (float)Math.sqrt(AutoSetConfig.floorMax()) * 0.75F + 0.5F));
+  }
+  
+  public static void init() {}
+  
+  public static void reset() {
+    lastDrillTiles.clear();
+    lastCount = 0;
+    lastHub = -1;
+  }
+  
+  public static int count() {
+    return lastCount;
+  }
+  
+  public static int generate() {
+    return run();
+  }
+  
+  private static int[] exitOrder(int paramInt) {
+    int[] arrayOfInt = new int[4];
+    arrayOfInt[0] = paramInt;
+    float f1 = 0.0F;
+    float f2 = 0.0F;
+    try {
+      if (Vars.player != null && Vars.player.closestCore() != null && LunariansSettings.drillStartX != Integer.MIN_VALUE) {
+        f1 = (Vars.player.closestCore().tileX() - LunariansSettings.drillStartX);
+        f2 = (Vars.player.closestCore().tileY() - LunariansSettings.drillStartY);
+      } 
+    } catch (Throwable throwable) {}
+    boolean[] arrayOfBoolean = new boolean[4];
+    arrayOfBoolean[paramInt] = true;
+    for (byte b = 1; b < 4; b++) {
+      byte b1 = -1;
+      float f = -3.4028235E38F;
+      for (byte b2 = 0; b2 < 4; b2++) {
+        float f3;
+        if (!arrayOfBoolean[b2] && (f3 = DX[b2] * f1 + DY[b2] * f2) > f) {
+          f = f3;
+          b1 = b2;
+        } 
+      } 
+      arrayOfBoolean[b1] = true;
+      arrayOfInt[b] = b1;
+    } 
+    return arrayOfInt;
+  }
+  
+  public static int generateWithConveyor() {
+    if (Vars.headless || Vars.player == null || Vars.state == null || !Vars.state.isGame())
+      return 0; 
+    int i = LunariansSettings.drillExitDir & 0x3;
+    try {
+      Unit unit = Vars.player.unit();
+      if (unit == null || !unit.canBuild()) {
+        toast(LunariansI18n.get("cv_need_builder"));
+        boolean bool5 = false;
+        boolean bool6 = false;
+        boolean bool4 = false, bool7 = bool4;
+        return bool7;
+      } 
+      boolean[] arrayOfBoolean = AutoConnectConveyor.reservedFromPlans(unit);
+      int[] arrayOfInt = exitOrder(i);
+      int j = Vars.world.width();
+      byte b;
+      for (b = 0; b < arrayOfInt.length; b++) {
+        int k, m = arrayOfInt[b];
+        dryRun = true;
         try {
-            int width = Vars.world.width();
-            int height = Vars.world.height();
-            for (int i = 0; i < height; i++) {
-                for (int i2 = 0; i2 < width; i2++) {
-                    Tile tile = Vars.world.tile(i2, i);
-                    if (tile != null && tile.build != null && tile.build.block != null && pollutes(tile.build.block)) {
-                        markAround(reservedFromPlans, i2, i, width, height);
-                    }
-                }
-            }
-            Iterator it = unit.plans().iterator();
-            while (it.hasNext()) {
-                BuildPlan buildPlan = (BuildPlan) it.next();
-                if (!buildPlan.breaking && buildPlan.block != null && pollutes(buildPlan.block)) {
-                    int i3 = buildPlan.block.size;
-                    int i4 = (i3 - 1) / 2;
-                    for (int i5 = 0; i5 < i3; i5++) {
-                        for (int i6 = 0; i6 < i3; i6++) {
-                            markAround(reservedFromPlans, (buildPlan.x - i4) + i6, (buildPlan.y - i4) + i5, width, height);
-                        }
-                    }
-                }
-            }
-        } catch (Throwable th) {
-            if (!errorLogged) {
-                errorLogged = true;
-                Log.err("[Lunarians] reservedForFeed", th);
-            }
-        }
-        return reservedFromPlans;
-    }
-
-    /* JADX WARN: Multi-variable type inference failed */
-    private static Seq<BuildPlan> pruneConveyors(Seq<BuildPlan> seq, Block block, int i) {
-        int i2;
-        Integer num;
-        try {
-            if (lastHub < 0 || seq == null || seq.isEmpty()) {
-                return seq;
-            }
-            int height = Vars.world.height();
-            int[] iArr = new int[i * height];
-            Arrays.fill(iArr, -1);
-            ArrayList arrayList = new ArrayList();
-            HashMap hashMap = new HashMap();
-            int i3 = 0;
-            for (int i4 = 0; i4 < seq.size; i4++) {
-                BuildPlan buildPlan = (BuildPlan) seq.get(i4);
-                if (buildPlan.block == block) {
-                    if (buildPlan.x >= 0 && buildPlan.y >= 0 && buildPlan.x < i && buildPlan.y < height) {
-                        iArr[(buildPlan.y * i) + buildPlan.x] = arrayList.size();
-                        arrayList.add(buildPlan);
-                    }
-                } else if (buildPlan.block instanceof Drill) {
-                    int i5 = buildPlan.block.size;
-                    int i6 = (i5 - 1) / 2;
-                    for (int i7 = 0; i7 < i5; i7++) {
-                        for (int i8 = 0; i8 < i5; i8++) {
-                            hashMap.put(Integer.valueOf((((buildPlan.y - i6) + i7) * i) + (buildPlan.x - i6) + i8), Integer.valueOf(i3));
-                        }
-                    }
-                    i3++;
-                }
-            }
-            int size = arrayList.size();
-            if (size == 0 || iArr[lastHub] < 0) {
-                return seq;
-            }
-            int i9 = iArr[lastHub];
-            int[] iArr2 = new int[size];
-            int[] iArr3 = new int[size];
-            for (int i10 = 0; i10 < size; i10++) {
-                BuildPlan buildPlan2 = (BuildPlan) arrayList.get(i10);
-                int i11 = buildPlan2.rotation & 3;
-                int i12 = buildPlan2.x + DX[i11];
-                int i13 = buildPlan2.y + DY[i11];
-                iArr2[i10] = (i12 < 0 || i13 < 0 || i12 >= i || i13 >= height) ? -1 : iArr[(i13 * i) + i12];
-                ArrayList arrayList2 = new ArrayList();
-                for (int i14 = 0; i14 < 4; i14++) {
-                    if (i14 != i11) {
-                        int i15 = buildPlan2.x + DX[i14];
-                        int i16 = buildPlan2.y + DY[i14];
-                        if (i15 >= 0 && i16 >= 0 && i15 < i && i16 < height && (num = (Integer) hashMap.get(Integer.valueOf((i16 * i) + i15))) != null && !arrayList2.contains(num)) {
-                            arrayList2.add(num);
-                        }
-                    }
-                }
-                iArr3[i10] = new int[arrayList2.size()];
-                for (int i17 = 0; i17 < arrayList2.size(); i17++) {
-                    iArr3[i10][i17] = ((Integer) arrayList2.get(i17)).intValue();
-                }
-            }
-            boolean[] zArr = new boolean[size];
-            for (int i18 = 0; i18 < size; i18++) {
-                int i19 = i18;
-                int i20 = 0;
-                while (true) {
-                    if (i19 >= 0 && i20 <= size) {
-                        if (i19 == i9) {
-                            zArr[i18] = true;
-                            break;
-                        }
-                        i19 = iArr2[i19];
-                        i20++;
-                    }
-                }
-            }
-            boolean z = true;
-            while (z) {
-                z = false;
-                int[] iArr4 = new int[size];
-                for (int i21 = 0; i21 < size; i21++) {
-                    if (zArr[i21] && iArr2[i21] >= 0 && zArr[iArr2[i21]]) {
-                        int i22 = iArr2[i21];
-                        iArr4[i22] = iArr4[i22] + 1;
-                    }
-                }
-                int[] iArr5 = new int[Math.max(1, i3)];
-                for (int i23 = 0; i23 < size; i23++) {
-                    if (zArr[i23]) {
-                        for (char c : iArr3[i23]) {
-                            iArr5[c] = iArr5[c] + 1;
-                        }
-                    }
-                }
-                for (int i24 = 0; i24 < size; i24++) {
-                    if (zArr[i24] && i24 != i9 && iArr4[i24] <= 0) {
-                        boolean z2 = false;
-                        Object[] objArr = iArr3[i24];
-                        int length = objArr.length;
-                        int i25 = 0;
-                        while (true) {
-                            if (i25 >= length) {
-                                break;
-                            }
-                            if (iArr5[objArr[i25]] > 1) {
-                                i25++;
-                            } else {
-                                z2 = true;
-                                break;
-                            }
-                        }
-                        if (!z2) {
-                            zArr[i24] = false;
-                            z = true;
-                            for (char c2 : iArr3[i24]) {
-                                iArr5[c2] = iArr5[c2] - 1;
-                            }
-                        }
-                    }
-                }
-            }
-            Seq<BuildPlan> seq2 = new Seq<>();
-            for (int i26 = 0; i26 < seq.size; i26++) {
-                BuildPlan buildPlan3 = (BuildPlan) seq.get(i26);
-                if (buildPlan3.block != block || buildPlan3.x < 0 || buildPlan3.y < 0 || buildPlan3.x >= i || buildPlan3.y >= height || (i2 = iArr[(buildPlan3.y * i) + buildPlan3.x]) < 0 || zArr[i2]) {
-                    seq2.add(buildPlan3);
-                }
-            }
-            return seq2;
-        } catch (Throwable th) {
-            if (!errorLogged) {
-                errorLogged = true;
-                Log.err("[Lunarians] pruneConveyors", th);
-            }
-            return seq;
-        }
-    }
-
-    private static boolean pt() {
-        return "pt".equals(LunariansSettings.language);
-    }
-
-    private static void toast(String str) {
-        if (Vars.ui != null) {
-            Vars.ui.showInfoToast(str, 3.5f);
-        }
-    }
+          k = generateInner();
+        } finally {
+          dryRun = false;
+        } 
+        if (k <= 0) {
+          boolean bool6 = false;
+          boolean bool4 = false;
+          boolean bool5 = false, bool7 = bool5;
+          return bool7;
+        } 
+        if (lastHub >= 0) {
+          boolean[] arrayOfBoolean1 = (boolean[])arrayOfBoolean.clone();
+          int n;
+          for (n = 0; n < lastPlans.size; n++)
+            AutoConnectConveyor.markPlan((BuildPlan)lastPlans.get(n), arrayOfBoolean1); 
+          n = lastHub % j + DX[m];
+          int i1 = lastHub / j + DY[m];
+          Seq<BuildPlan> seq;
+          if (Vars.world.tiles.in(n, i1) && (seq = AutoConnectConveyor.planRoute(n, i1, m, arrayOfBoolean1)) != null) {
+            int i3;
+            for (i3 = 0; i3 < lastPlans.size; i3++)
+              unit.addBuild((BuildPlan)lastPlans.get(i3), true); 
+            for (i3 = 0; i3 < seq.size; i3++)
+              unit.addBuild((BuildPlan)seq.get(i3), true); 
+            if (!quiet)
+              toast(LunariansI18n.get("dr_summary", String.valueOf(k), String.valueOf(seq.size))); 
+            int i4 = i3 = k;
+            int i2 = i3, i5 = i2;
+            return i5;
+          } 
+        } 
+      } 
+      if (!quiet)
+        toast(LunariansI18n.get("cv_no_path")); 
+      b = 0;
+      boolean bool2 = false;
+      boolean bool1 = false, bool3 = bool1;
+      return bool3;
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] AutoDrill+Conveyor error", throwable);
+      } 
+      boolean bool3 = false;
+      boolean bool1 = false;
+      boolean bool2 = false, bool4 = bool2;
+      return bool4;
+    } finally {
+      LunariansSettings.drillExitDir = i;
+      dryRun = false;
+    } 
+  }
+  
+  private static int run() {
+    if (Vars.headless || Vars.player == null || Vars.state == null || !Vars.state.isGame())
+      return 0; 
+    try {
+      return generateInner();
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] AutoDrill error", throwable);
+      } 
+      return 0;
+    } 
+  }
+  
+  private static Block resolveDrill() {
+    String str = LunariansSettings.drillBlock;
+    if (str == null || str.isEmpty())
+      str = "mechanical-drill"; 
+    Block block;
+    if (block = Vars.content.block(str) instanceof Drill)
+      return block; 
+    return Blocks.mechanicalDrill;
+  }
+  
+  private static Block resolveConveyor() {
+    String str = LunariansSettings.conveyorBlock;
+    if (str == null || str.isEmpty())
+      str = "conveyor"; 
+    Block block;
+    if (block = Vars.content.block(str) instanceof mindustry.world.blocks.distribution.Conveyor)
+      return block; 
+    return Blocks.conveyor;
+  }
+  
+  private static Item oreAt(Tile paramTile) {
+    if (paramTile == null)
+      return null; 
+    try {
+      if (paramTile.drop() != null)
+        return paramTile.drop(); 
+    } catch (Throwable throwable) {}
+    Floor floor1 = (paramTile.overlay() != null) ? paramTile.overlay() : paramTile.floor(), floor2 = floor1;
+    if (floor1 != null && floor1.itemDrop != null)
+      return floor1.itemDrop; 
+    return null;
+  }
+  
+  private static boolean sameOre(Tile paramTile, Item paramItem) {
+    Item item = oreAt(paramTile);
+    return (item != null && item == paramItem);
+  }
+  
+  private static boolean free(int paramInt1, int paramInt2, boolean[] paramArrayOfboolean, int paramInt3, int paramInt4) {
+    if (!Vars.world.tiles.in(paramInt1, paramInt2))
+      return false; 
+    if (paramArrayOfboolean[paramInt2 * paramInt3 + paramInt1])
+      return false; 
+    Tile tile = Vars.world.tile(paramInt1, paramInt2);
+    if (tile == null || tile.solid())
+      return false; 
+    return (tile.build == null || tile.build.block == null || !tile.build.block.solid);
+  }
+  
+  private static boolean freeConv(int paramInt1, int paramInt2, boolean[] paramArrayOfboolean, int paramInt3, int paramInt4) {
+    if (!Vars.world.tiles.in(paramInt1, paramInt2))
+      return false; 
+    if (paramArrayOfboolean[paramInt2 * paramInt3 + paramInt1])
+      return false; 
+    Tile tile = Vars.world.tile(paramInt1, paramInt2);
+    if (tile == null)
+      return false; 
+    if (tile.build != null && tile.build.block != null && tile.build.block.solid)
+      return false; 
+    if (limitOn && (tile.build != null || nextToDrill(paramInt1, paramInt2)))
+      return false; 
+    return (tile.block() == null || !(tile.block()).solid || !tile.block().isStatic());
+  }
+  
+  private static int generateInner() {
+    failedNoneFit = false;
+    int i = generateInner2(true);
+    if (i <= 0 && failedNoneFit) {
+      failedNoneFit = false;
+      i = generateInner2(false);
+    } 
+    return i;
+  }
+  
+  private static int generateInner2(boolean paramBoolean) {
+    lastHub = -1;
+    int i8 = LunariansSettings.drillStartX;
+    int i9 = LunariansSettings.drillStartY;
+    if (i8 == Integer.MIN_VALUE || i9 == Integer.MIN_VALUE) {
+      toast(LunariansI18n.get("dr_set_ore"));
+      return 0;
+    } 
+    Tile tile = Vars.world.tile(i8, i9);
+    Item item = oreAt(tile);
+    if (item == null) {
+      toast(LunariansI18n.get("dr_no_ore"));
+      return 0;
+    } 
+    Block block1 = resolveDrillFor(item);
+    Block block2 = resolveConveyor();
+    if (!(block1 instanceof Drill) || block2 == null) {
+      toast(LunariansI18n.get("dr_invalid"));
+      return 0;
+    } 
+    if (((Drill)block1).tier < item.hardness) {
+      toast(pt() ? ("Nenhuma drill disponível consegue minerar " + item.localizedName) : ("No available drill can mine " + item.localizedName));
+      return 0;
+    } 
+    int i10 = block1.size;
+    int i11 = Math.max(16, LunariansSettings.drillMaxTiles);
+    if (limitOn && floorOre(tile))
+      i11 = Math.min(i11, AutoSetConfig.floorMax()); 
+    int i7 = Math.max(1, LunariansSettings.drillMinOres), i12 = i7;
+    int i13 = (i10 * i10 + 1) / 2;
+    boolean bool1 = false;
+    if (limitOn && paramBoolean && i13 > i7) {
+      i12 = i13;
+      bool1 = true;
+    } 
+    int i14 = LunariansSettings.drillExitDir & 0x3;
+    boolean bool2 = (LunariansSettings.drillLayoutMode == 1) ? true : false;
+    Unit unit = Vars.player.unit();
+    if (unit == null || !unit.canBuild()) {
+      toast(LunariansI18n.get("cv_need_builder"));
+      return 0;
+    } 
+    int i15 = Vars.world.width();
+    int i16 = Vars.world.height();
+    boolean[] arrayOfBoolean1 = new boolean[i15 * i16];
+    IntSeq intSeq1 = new IntSeq();
+    IntQueue intQueue = new IntQueue();
+    int i17 = i9 * i15 + i8;
+    intQueue.addLast(i17);
+    arrayOfBoolean1[i17] = true;
+    while (!intQueue.isEmpty() && intSeq1.size < i11) {
+      int i20 = intQueue.removeFirst();
+      intSeq1.add(i20);
+      int i19 = i20 % i15;
+      int i18 = i20 / i15;
+      for (byte b = 0; b < 4; b++) {
+        int i23 = i19 + DX[b];
+        int i22 = i18 + DY[b];
+        int i21;
+        if (Vars.world.tiles.in(i23, i22) && !arrayOfBoolean1[i21 = i22 * i15 + i23] && sameOre(Vars.world.tile(i23, i22), item) && inLimit(i23, i22) && inFloor(i23, i22, i8, i9)) {
+          arrayOfBoolean1[i21] = true;
+          intQueue.addLast(i21);
+        } 
+      } 
+    } 
+    if (intSeq1.isEmpty()) {
+      toast(LunariansI18n.get("dr_empty"));
+      return 0;
+    } 
+    int i6 = Integer.MAX_VALUE;
+    int i5 = Integer.MAX_VALUE;
+    int i4 = 0;
+    int i3 = 0;
+    for (byte b2 = 0; b2 < intSeq1.size; b2++) {
+      int i20 = intSeq1.get(b2);
+      int i19 = i20 % i15;
+      int i18 = i20 / i15;
+      i6 = Math.min(i6, i19);
+      i5 = Math.min(i5, i18);
+      i4 = Math.max(i4, i19);
+      i3 = Math.max(i3, i18);
+    } 
+    boolean[] arrayOfBoolean2 = limitOn ? AutoConnectConveyor.reservedFromPlans(unit) : new boolean[i15 * i16];
+    boolean[] arrayOfBoolean3 = new boolean[i15 * i16];
+    Seq<BuildPlan> seq = new Seq();
+    lastDrillTiles.clear();
+    int i2 = 0;
+    IntSeq intSeq2 = new IntSeq();
+    boolean bool3 = (i14 == 1 || i14 == 3) ? true : false;
+    byte b3 = 0;
+    byte b4 = 0;
+    if (LunariansSettings.drillPerfect) {
+      int i18 = -1;
+      int i19 = Integer.MAX_VALUE;
+      for (byte b = 0; b <= i10; b++) {
+        for (byte b5 = 0; b5 <= i10; b5++) {
+          int[] arrayOfInt1 = scanGrid(bool3, bool2, b, b5, i10, i6, i5, i4, i3, i12, item, arrayOfBoolean1, (boolean[])arrayOfBoolean2.clone(), (boolean[])arrayOfBoolean3.clone(), i15, i16, block1, new Seq(), new IntSeq(), new IntSeq());
+          if (arrayOfInt1[0] != 0 && (
+            arrayOfInt1[1] > i18 || (arrayOfInt1[1] == i18 && arrayOfInt1[0] < i19))) {
+            i18 = arrayOfInt1[1];
+            i19 = arrayOfInt1[0];
+            b3 = b;
+            b4 = b5;
+          } 
+        } 
+      } 
+    } 
+    int[] arrayOfInt = scanGrid(bool3, bool2, b3, b4, i10, i6, i5, i4, i3, i12, item, arrayOfBoolean1, arrayOfBoolean2, arrayOfBoolean3, i15, i16, block1, seq, lastDrillTiles, intSeq2);
+    i2 = arrayOfInt[0];
+    if (LunariansSettings.drillPerfect && i2 > 0)
+      i2 += fillGaps(bool3, i10, i12, item, arrayOfBoolean1, arrayOfBoolean2, arrayOfBoolean3, i15, i16, block1, seq, lastDrillTiles, intSeq2); 
+    if (i2 == 0) {
+      if (bool1) {
+        failedNoneFit = true;
+        return 0;
+      } 
+      toast(LunariansI18n.get("dr_none_fit"));
+      return 0;
+    } 
+    int i1 = Integer.MAX_VALUE;
+    int n = Integer.MAX_VALUE;
+    int m = 0;
+    int k = 0;
+    byte b1;
+    for (b1 = 0; b1 < lastDrillTiles.size; b1++) {
+      int i20 = lastDrillTiles.get(b1);
+      int i19 = i20 % i15;
+      int i18 = i20 / i15;
+      i1 = Math.min(i1, i19);
+      n = Math.min(n, i18);
+      m = Math.max(m, i19 + i10 - 1);
+      k = Math.max(k, i18 + i10 - 1);
+    } 
+    b1 = 0;
+    if (i14 == 1 || i14 == 3) {
+      int i19 = i1 - 1;
+      int i18 = m + 1;
+      if (i19 >= 0 && !intSeq2.contains(i19))
+        intSeq2.add(i19); 
+      if (i18 < i15 && !intSeq2.contains(i18))
+        intSeq2.add(i18); 
+    } else {
+      int i19 = n - 1;
+      int i18 = k + 1;
+      if (i19 >= 0 && !intSeq2.contains(i19))
+        intSeq2.add(i19); 
+      if (i18 < i16 && !intSeq2.contains(i18))
+        intSeq2.add(i18); 
+    } 
+    if (i14 == 1 || i14 == 3) {
+      for (byte b = 0; b < intSeq2.size; b++) {
+        int i19 = intSeq2.get(b);
+        for (int i18 = n; i18 <= k; i18++) {
+          if (freeConv(i19, i18, arrayOfBoolean2, i15, i16)) {
+            seq.add(new BuildPlan(i19, i18, i14, block2));
+            arrayOfBoolean2[i18 * i15 + i19] = true;
+            b1++;
+          } 
+        } 
+      } 
+    } else {
+      for (byte b = 0; b < intSeq2.size; b++) {
+        int i19 = intSeq2.get(b);
+        for (int i18 = i1; i18 <= m; i18++) {
+          if (freeConv(i18, i19, arrayOfBoolean2, i15, i16)) {
+            seq.add(new BuildPlan(i18, i19, i14, block2));
+            arrayOfBoolean2[i19 * i15 + i18] = true;
+            b1++;
+          } 
+        } 
+      } 
+    } 
+    int j;
+    for (j = 0; j < lastDrillTiles.size; j++) {
+      int i20 = lastDrillTiles.get(j);
+      int i19 = i20 % i15;
+      int i18, arrayOfInt1[] = pickFace(i19, i18 = i20 / i15, i10, i14, intSeq2, arrayOfBoolean2, arrayOfBoolean3, i15, i16);
+      if (arrayOfInt1 != null) {
+        int i21 = arrayOfInt1[0];
+        int i22 = arrayOfInt1[1];
+        int i23 = arrayOfInt1[2];
+        if (freeConv(i21, i22, arrayOfBoolean2, i15, i16)) {
+          seq.add(new BuildPlan(i21, i22, i23, block2));
+          arrayOfBoolean2[i22 * i15 + i21] = true;
+          b1++;
+        } 
+      } 
+    } 
+    for (j = 0; j < lastDrillTiles.size; j++) {
+      int i20 = lastDrillTiles.get(j);
+      int i19 = i20 % i15;
+      int i18;
+      if (!hasAdjConv(i19, i18 = i20 / i15, i10, arrayOfBoolean2, i15)) {
+        int[] arrayOfInt1;
+        boolean bool = false;
+        int[][] arrayOfInt2 = new int[1][];
+        if (i14 == 0) {
+          int[] arrayOfInt3 = new int[3];
+          arrayOfInt3[0] = i19 + i10;
+          arrayOfInt3[1] = i18;
+          arrayOfInt1 = arrayOfInt3;
+          arrayOfInt3[2] = 0;
+        } else if (i14 == 1) {
+          int[] arrayOfInt3 = new int[3];
+          arrayOfInt3[0] = i19;
+          arrayOfInt3[1] = i18 + i10;
+          arrayOfInt1 = arrayOfInt3;
+          arrayOfInt3[2] = 1;
+        } else if (i14 == 2) {
+          int[] arrayOfInt3 = new int[3];
+          arrayOfInt3[0] = i19 - 1;
+          arrayOfInt3[1] = i18;
+          arrayOfInt1 = arrayOfInt3;
+          arrayOfInt3[2] = 2;
+        } else {
+          int[] arrayOfInt3 = new int[3];
+          arrayOfInt3[0] = i19;
+          arrayOfInt3[1] = i18 - 1;
+          arrayOfInt1 = arrayOfInt3;
+          arrayOfInt3[2] = 3;
+        } 
+        arrayOfInt2[0] = arrayOfInt1;
+        IntSeq intSeq3 = new IntSeq();
+        IntSeq intSeq4 = new IntSeq();
+        IntSeq intSeq5 = new IntSeq();
+        byte b;
+        for (b = 0; b < i10; b++) {
+          if (i14 == 0) {
+            intSeq3.add(i19 + i10);
+            intSeq4.add(i18 + b);
+            intSeq5.add(0);
+          } else if (i14 == 1) {
+            intSeq3.add(i19 + b);
+            intSeq4.add(i18 + i10);
+            intSeq5.add(1);
+          } else if (i14 == 2) {
+            intSeq3.add(i19 - 1);
+            intSeq4.add(i18 + b);
+            intSeq5.add(2);
+          } else {
+            intSeq3.add(i19 + b);
+            intSeq4.add(i18 - 1);
+            intSeq5.add(3);
+          } 
+        } 
+        for (b = 0; b < i10; b++) {
+          intSeq3.add(i19 + i10);
+          intSeq4.add(i18 + b);
+          intSeq5.add(0);
+          intSeq3.add(i19 - 1);
+          intSeq4.add(i18 + b);
+          intSeq5.add(2);
+          intSeq3.add(i19 + b);
+          intSeq4.add(i18 + i10);
+          intSeq5.add(1);
+          intSeq3.add(i19 + b);
+          intSeq4.add(i18 - 1);
+          intSeq5.add(3);
+        } 
+        for (b = 0; b < intSeq3.size; ) {
+          int i21 = intSeq3.get(b);
+          int i22 = intSeq4.get(b);
+          int i23 = intSeq5.get(b);
+          if (!freeConv(i21, i22, arrayOfBoolean2, i15, i16)) {
+            b++;
+            continue;
+          } 
+          seq.add(new BuildPlan(i21, i22, i23, block2));
+          arrayOfBoolean2[i22 * i15 + i21] = true;
+          b1++;
+          bool = true;
+        } 
+      } 
+    } 
+    for (j = 0; j < lastDrillTiles.size; j++) {
+      int i20 = lastDrillTiles.get(j);
+      int i19 = i20 % i15;
+      int i18 = i20 / i15;
+      if (i14 == 1 || i14 == 3) {
+        for (byte b = 0; b < i10; b++) {
+          int i21 = i19 + i10;
+          int i22 = i18 + b;
+          if (freeConv(i21, i22, arrayOfBoolean2, i15, i16)) {
+            boolean bool = false;
+            seq.add(new BuildPlan(i21, i22, bool, block2));
+            arrayOfBoolean2[i22 * i15 + i21] = true;
+            b1++;
+          } 
+          if (freeConv(i21 = i19 - 1, i22 = i18 + b, arrayOfBoolean2, i15, i16)) {
+            seq.add(new BuildPlan(i21, i22, 2, block2));
+            arrayOfBoolean2[i22 * i15 + i21] = true;
+            b1++;
+          } 
+        } 
+      } else {
+        for (byte b = 0; b < i10; b++) {
+          int i21 = i19 + b;
+          int i22 = i18 + i10;
+          if (freeConv(i21, i22, arrayOfBoolean2, i15, i16)) {
+            seq.add(new BuildPlan(i21, i22, 1, block2));
+            arrayOfBoolean2[i22 * i15 + i21] = true;
+            b1++;
+          } 
+          if (freeConv(i21 = i19 + b, i22 = i18 - 1, arrayOfBoolean2, i15, i16)) {
+            seq.add(new BuildPlan(i21, i22, 3, block2));
+            arrayOfBoolean2[i22 * i15 + i21] = true;
+            b1++;
+          } 
+        } 
+      } 
+    } 
+    if (i14 == 1 || i14 == 3) {
+      for (j = 0; j < lastDrillTiles.size; j++) {
+        int i22 = lastDrillTiles.get(j);
+        int i21 = i22 % i15;
+        int i18 = i22 / i15;
+        int i20 = Integer.MIN_VALUE;
+        int i19 = Integer.MAX_VALUE;
+        byte b;
+        for (b = 0; b < intSeq2.size; b++) {
+          int i24 = intSeq2.get(b);
+          int i23 = Math.abs(i24 - i21 + i10 / 2);
+          if (i23 < i19) {
+            i19 = i23;
+            i20 = i24;
+          } 
+        } 
+        if (i20 != Integer.MIN_VALUE)
+          for (b = 0; b < i10; b++) {
+            int i25 = i18 + b;
+            int i24 = (i20 > i21) ? (i21 + i10) : (i21 - 1);
+            byte b5 = (i20 > i21) ? 1 : -1;
+            for (int i23 = i24; i23 != i20 && freeConv(i23, i25, arrayOfBoolean2, i15, i16); i23 += b5) {
+              seq.add(new BuildPlan(i23, i25, b5 ? 0 : 2, block2));
+              arrayOfBoolean2[i25 * i15 + i23] = true;
+              b1++;
+              if (Math.abs(i23 - i24) > 6)
+                break; 
+            } 
+          }  
+      } 
+    } else {
+      for (j = 0; j < lastDrillTiles.size; j++) {
+        int i22 = lastDrillTiles.get(j);
+        int i21 = i22 % i15;
+        int i18 = i22 / i15;
+        int i20 = Integer.MIN_VALUE;
+        int i19 = Integer.MAX_VALUE;
+        byte b;
+        for (b = 0; b < intSeq2.size; b++) {
+          int i24 = intSeq2.get(b);
+          int i23 = Math.abs(i24 - i18 + i10 / 2);
+          if (i23 < i19) {
+            i19 = i23;
+            i20 = i24;
+          } 
+        } 
+        if (i20 != Integer.MIN_VALUE)
+          for (b = 0; b < i10; b++) {
+            int i25 = i21 + b;
+            int i24 = (i20 > i18) ? (i18 + i10) : (i18 - 1);
+            byte b5 = (i20 > i18) ? 1 : -1;
+            for (int i23 = i24; i23 != i20 && freeConv(i25, i23, arrayOfBoolean2, i15, i16); i23 += b5) {
+              seq.add(new BuildPlan(i25, i23, b5 ? 1 : 3, block2));
+              arrayOfBoolean2[i23 * i15 + i25] = true;
+              b1++;
+              if (Math.abs(i23 - i24) > 6)
+                break; 
+            } 
+          }  
+      } 
+    } 
+    j = (i1 + m) / 2;
+    int i = (n + k) / 2;
+    if ((i14 == 1 || i14 == 3) && intSeq2.size > 0) {
+      int i19 = intSeq2.get(0);
+      int i18 = Math.abs(i19 - j);
+      for (byte b = 1; b < intSeq2.size; b++) {
+        int i20 = intSeq2.get(b);
+        if (Math.abs(i20 - j) < i18) {
+          i18 = Math.abs(i20 - j);
+          i19 = i20;
+        } 
+      } 
+      j = i19;
+    } 
+    if ((i14 == 0 || i14 == 2) && intSeq2.size > 0) {
+      int i19 = intSeq2.get(0);
+      int i18 = Math.abs(i19 - i);
+      for (byte b = 1; b < intSeq2.size; b++) {
+        int i20 = intSeq2.get(b);
+        if (Math.abs(i20 - i) < i18) {
+          i18 = Math.abs(i20 - i);
+          i19 = i20;
+        } 
+      } 
+      i = i19;
+    } 
+    if (i14 == 1) {
+      int i18 = k + 1;
+      if (i18 < i16) {
+        for (int i19 = i1; i19 <= m; i19++) {
+          if (freeConv(i19, i18, arrayOfBoolean2, i15, i16)) {
+            boolean bool = false;
+            int i20;
+            for (i20 = n; i20 <= k && !bool; i20++) {
+              if (arrayOfBoolean3[i20 * i15 + i19] || arrayOfBoolean2[i20 * i15 + i19])
+                bool = true; 
+            } 
+            if (bool) {
+              i20 = (i19 == j) ? 1 : ((i19 < j) ? 0 : 2);
+              seq.add(new BuildPlan(i19, i18, i20, block2));
+              arrayOfBoolean2[i18 * i15 + i19] = true;
+              b1++;
+            } 
+          } 
+        } 
+        if (freeConv(j, i18 + 1, arrayOfBoolean2, i15, i16)) {
+          seq.add(new BuildPlan(j, i18 + 1, 1, block2));
+          arrayOfBoolean2[(i18 + 1) * i15 + j] = true;
+          b1++;
+          lastHub = (i18 + 1) * i15 + j;
+        } else {
+          lastHub = i18 * i15 + j;
+        } 
+      } 
+    } else if (i14 == 3) {
+      int i18 = n - 1;
+      if (i18 >= 0) {
+        for (int i19 = i1; i19 <= m; i19++) {
+          if (freeConv(i19, i18, arrayOfBoolean2, i15, i16)) {
+            boolean bool = false;
+            int i20;
+            for (i20 = n; i20 <= k && !bool; i20++) {
+              if (arrayOfBoolean3[i20 * i15 + i19] || arrayOfBoolean2[i20 * i15 + i19])
+                bool = true; 
+            } 
+            if (bool) {
+              i20 = (i19 == j) ? 3 : ((i19 < j) ? 0 : 2);
+              seq.add(new BuildPlan(i19, i18, i20, block2));
+              arrayOfBoolean2[i18 * i15 + i19] = true;
+              b1++;
+            } 
+          } 
+        } 
+        if (freeConv(j, i18 - 1, arrayOfBoolean2, i15, i16)) {
+          seq.add(new BuildPlan(j, i18 - 1, 3, block2));
+          arrayOfBoolean2[(i18 - 1) * i15 + j] = true;
+          b1++;
+          lastHub = (i18 - 1) * i15 + j;
+        } else {
+          lastHub = i18 * i15 + j;
+        } 
+      } 
+    } else if (i14 == 0) {
+      int i18 = m + 1;
+      if (i18 < i15) {
+        for (int i19 = n; i19 <= k; i19++) {
+          if (freeConv(i18, i19, arrayOfBoolean2, i15, i16)) {
+            boolean bool = false;
+            int i20;
+            for (i20 = i1; i20 <= m && !bool; i20++) {
+              if (arrayOfBoolean3[i19 * i15 + i20] || arrayOfBoolean2[i19 * i15 + i20])
+                bool = true; 
+            } 
+            if (bool) {
+              i20 = (i19 == i) ? 0 : ((i19 < i) ? 1 : 3);
+              seq.add(new BuildPlan(i18, i19, i20, block2));
+              arrayOfBoolean2[i19 * i15 + i18] = true;
+              b1++;
+            } 
+          } 
+        } 
+        if (freeConv(i18 + 1, i, arrayOfBoolean2, i15, i16)) {
+          seq.add(new BuildPlan(i18 + 1, i, 0, block2));
+          arrayOfBoolean2[i * i15 + i18 + 1] = true;
+          b1++;
+          lastHub = i * i15 + i18 + 1;
+        } else {
+          lastHub = i * i15 + i18;
+        } 
+      } 
+    } else {
+      int i18 = i1 - 1;
+      if (i18 >= 0) {
+        for (int i19 = n; i19 <= k; i19++) {
+          if (freeConv(i18, i19, arrayOfBoolean2, i15, i16)) {
+            boolean bool = false;
+            int i20;
+            for (i20 = i1; i20 <= m && !bool; i20++) {
+              if (arrayOfBoolean3[i19 * i15 + i20] || arrayOfBoolean2[i19 * i15 + i20])
+                bool = true; 
+            } 
+            if (bool) {
+              i20 = (i19 == i) ? 2 : ((i19 < i) ? 1 : 3);
+              seq.add(new BuildPlan(i18, i19, i20, block2));
+              arrayOfBoolean2[i19 * i15 + i18] = true;
+              b1++;
+            } 
+          } 
+        } 
+        if (freeConv(i18 - 1, i, arrayOfBoolean2, i15, i16)) {
+          seq.add(new BuildPlan(i18 - 1, i, 2, block2));
+          arrayOfBoolean2[i * i15 + i18 - 1] = true;
+          b1++;
+          lastHub = i * i15 + i18 - 1;
+        } else {
+          lastHub = i * i15 + i18;
+        } 
+      } 
+    } 
+    if (i14 == 1 || i14 == 3) {
+      int i18 = (i14 == 1) ? (k + 1) : (n - 1);
+      for (byte b = 0; b < intSeq2.size; b++) {
+        int i19 = intSeq2.get(b);
+        if (i14 == 1) {
+          for (int i20 = k; i20 <= i18; i20++) {
+            if (freeConv(i19, i20, arrayOfBoolean2, i15, i16)) {
+              seq.add(new BuildPlan(i19, i20, 1, block2));
+              arrayOfBoolean2[i20 * i15 + i19] = true;
+              b1++;
+            } 
+          } 
+        } else {
+          for (int i20 = i18; i20 <= n; i20++) {
+            if (freeConv(i19, i20, arrayOfBoolean2, i15, i16)) {
+              seq.add(new BuildPlan(i19, i20, 3, block2));
+              arrayOfBoolean2[i20 * i15 + i19] = true;
+              b1++;
+            } 
+          } 
+        } 
+      } 
+    } else {
+      int i18 = (i14 == 0) ? (m + 1) : (i1 - 1);
+      for (byte b = 0; b < intSeq2.size; b++) {
+        int i19 = intSeq2.get(b);
+        if (i14 == 0) {
+          for (int i20 = m; i20 <= i18; i20++) {
+            if (freeConv(i20, i19, arrayOfBoolean2, i15, i16)) {
+              seq.add(new BuildPlan(i20, i19, 0, block2));
+              arrayOfBoolean2[i19 * i15 + i20] = true;
+              b1++;
+            } 
+          } 
+        } else {
+          for (int i20 = i18; i20 <= i1; i20++) {
+            if (freeConv(i20, i19, arrayOfBoolean2, i15, i16)) {
+              seq.add(new BuildPlan(i20, i19, 2, block2));
+              arrayOfBoolean2[i19 * i15 + i20] = true;
+              b1++;
+            } 
+          } 
+        } 
+      } 
+    } 
+    fixRotations(seq, block2, i15);
+    seq = pruneConveyors(seq, block2, i15);
+    b1 = 0;
+    for (j = 0; j < seq.size; j++) {
+      if (((BuildPlan)seq.get(j)).block == block2)
+        b1++; 
+    } 
+    seq = AutoConnectConveyor.sanitize(seq);
+    lastPlans.clear();
+    lastPlans.addAll(seq);
+    if (!dryRun) {
+      byte b;
+      for (b = 0; b < seq.size; b++) {
+        BuildPlan buildPlan = (BuildPlan)seq.get(b);
+        if (buildPlan.block instanceof Drill)
+          unit.addBuild(buildPlan, true); 
+      } 
+      for (b = 0; b < seq.size; b++) {
+        BuildPlan buildPlan = (BuildPlan)seq.get(b);
+        if (!(buildPlan.block instanceof Drill))
+          unit.addBuild(buildPlan, true); 
+      } 
+    } 
+    lastCount = i2;
+    if (!dryRun && !quiet)
+      toast(LunariansI18n.get("dr_summary", String.valueOf(i2), String.valueOf(b1))); 
+    return lastCount;
+  }
+  
+  private static int[] pickFace(int paramInt1, int paramInt2, int paramInt3, int paramInt4, IntSeq paramIntSeq, boolean[] paramArrayOfboolean1, boolean[] paramArrayOfboolean2, int paramInt5, int paramInt6) {
+    if (paramInt4 == 1 || paramInt4 == 3) {
+      int j = Integer.MIN_VALUE;
+      int k = Integer.MAX_VALUE;
+      int i;
+      for (i = 0; i < paramIntSeq.size; i++) {
+        int n = paramIntSeq.get(i);
+        int m = Math.abs(n - paramInt1 + paramInt3 / 2);
+        if (m < k) {
+          k = m;
+          j = n;
+        } 
+      } 
+      if (j != Integer.MIN_VALUE) {
+        i = (j > paramInt1) ? (paramInt1 + paramInt3) : (paramInt1 - 1);
+        for (byte b = 0; b < paramInt3; ) {
+          int m = paramInt2 + b;
+          if (!freeConv(i, m, paramArrayOfboolean1, paramInt5, paramInt6)) {
+            b++;
+            continue;
+          } 
+          boolean bool = (j > paramInt1) ? false : true;
+          return new int[] { i, m, bool };
+        } 
+      } 
+      for (i = 0; i < paramInt3; ) {
+        int m;
+        int n;
+        byte b;
+        if (paramInt4 == 1) {
+          n = paramInt1 + i;
+          m = paramInt2 + paramInt3;
+          b = 1;
+        } else {
+          n = paramInt1 + i;
+          m = paramInt2 - 1;
+          b = 3;
+        } 
+        if (!freeConv(n, m, paramArrayOfboolean1, paramInt5, paramInt6)) {
+          i++;
+          continue;
+        } 
+        return new int[] { n, m, b };
+      } 
+    } else {
+      int j = Integer.MIN_VALUE;
+      int k = Integer.MAX_VALUE;
+      int i;
+      for (i = 0; i < paramIntSeq.size; i++) {
+        int n = paramIntSeq.get(i);
+        int m = Math.abs(n - paramInt2 + paramInt3 / 2);
+        if (m < k) {
+          k = m;
+          j = n;
+        } 
+      } 
+      if (j != Integer.MIN_VALUE) {
+        i = (j > paramInt2) ? (paramInt2 + paramInt3) : (paramInt2 - 1);
+        for (byte b = 0; b < paramInt3; ) {
+          int m = paramInt1 + b;
+          if (!freeConv(m, i, paramArrayOfboolean1, paramInt5, paramInt6)) {
+            b++;
+            continue;
+          } 
+          boolean bool = (j > paramInt2) ? true : true;
+          return new int[] { m, i, bool };
+        } 
+      } 
+      for (i = 0; i < paramInt3; ) {
+        int m;
+        int n;
+        byte b;
+        if (paramInt4 == 0) {
+          n = paramInt1 + paramInt3;
+          m = paramInt2 + i;
+          b = 0;
+        } else {
+          n = paramInt1 - 1;
+          m = paramInt2 + i;
+          b = 2;
+        } 
+        if (!freeConv(n, m, paramArrayOfboolean1, paramInt5, paramInt6)) {
+          i++;
+          continue;
+        } 
+        return new int[] { n, m, b };
+      } 
+    } 
+    return null;
+  }
+  
+  private static boolean hasAdjConv(int paramInt1, int paramInt2, int paramInt3, boolean[] paramArrayOfboolean, int paramInt4) {
+    for (byte b = 0; b < paramInt3; b++) {
+      for (byte b1 = 0; b1 < paramInt3; b1++) {
+        for (byte b2 = 0; b2 < 4; ) {
+          int i = paramInt1 + b1 + DX[b2];
+          int j = paramInt2 + b + DY[b2];
+          if (!Vars.world.tiles.in(i, j) || (i >= paramInt1 && i < paramInt1 + paramInt3 && j >= paramInt2 && j < paramInt2 + paramInt3) || !paramArrayOfboolean[j * paramInt4 + i]) {
+            b2++;
+            continue;
+          } 
+          return true;
+        } 
+      } 
+    } 
+    return false;
+  }
+  
+  private static boolean touchesDrill(int paramInt1, int paramInt2, boolean[] paramArrayOfboolean, int paramInt3, int paramInt4) {
+    for (byte b = 0; b < 4; ) {
+      int i = paramInt1 + DX[b];
+      int j = paramInt2 + DY[b];
+      if (!Vars.world.tiles.in(i, j) || !paramArrayOfboolean[j * paramInt3 + i]) {
+        b++;
+        continue;
+      } 
+      return true;
+    } 
+    return false;
+  }
+  
+  private static boolean canPlaceDrill(int paramInt1, int paramInt2, int paramInt3, boolean[] paramArrayOfboolean, int paramInt4, int paramInt5) {
+    if (paramInt1 < 0 || paramInt2 < 0 || paramInt1 + paramInt3 > paramInt4 || paramInt2 + paramInt3 > paramInt5)
+      return false; 
+    for (byte b = 0; b < paramInt3; b++) {
+      for (byte b1 = 0; b1 < paramInt3; ) {
+        if (paramArrayOfboolean[(paramInt2 + b) * paramInt4 + paramInt1 + b1])
+          return false; 
+        Tile tile = Vars.world.tile(paramInt1 + b1, paramInt2 + b);
+        if (tile == null)
+          return false; 
+        if (tile.solid() && tile.build == null)
+          return false; 
+        if (tile.build == null || tile.build.block == null || !tile.build.block.solid) {
+          b1++;
+          continue;
+        } 
+        return false;
+      } 
+    } 
+    return (!limitOn || !crowded(paramInt1, paramInt2, paramInt3, (isoOverride >= 0) ? isoOverride : AutoSetConfig.spacing()));
+  }
+  
+  private static int[] scanGrid(boolean paramBoolean1, boolean paramBoolean2, int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5, int paramInt6, int paramInt7, int paramInt8, Item paramItem, boolean[] paramArrayOfboolean1, boolean[] paramArrayOfboolean2, boolean[] paramArrayOfboolean3, int paramInt9, int paramInt10, Block paramBlock, Seq<BuildPlan> paramSeq, IntSeq paramIntSeq1, IntSeq paramIntSeq2) {
+    int i = paramBoolean1 ? (paramInt4 + paramInt1) : (paramInt5 + paramInt2);
+    int j = paramBoolean1 ? (paramInt5 + paramInt2) : (paramInt4 + paramInt1);
+    int k = paramBoolean1 ? paramInt6 : paramInt7;
+    int m = paramBoolean1 ? paramInt7 : paramInt6;
+    int n = paramBoolean1 ? paramInt9 : paramInt10;
+    byte b1 = 0;
+    int i1 = 0;
+    byte b2 = 0;
+    while (i + paramInt3 - 1 <= k) {
+      boolean bool = false;
+      int i2 = j;
+      while (i2 + paramInt3 - 1 <= m) {
+        int i3 = paramBoolean1 ? i : i2;
+        int i4 = paramBoolean1 ? i2 : i;
+        if (canPlaceDrill(i3, i4, paramInt3, paramArrayOfboolean2, paramInt9, paramInt10)) {
+          int i5 = countOre(i3, i4, paramInt3, paramItem, paramArrayOfboolean1, paramInt9);
+          if (i5 >= paramInt8) {
+            paramSeq.add(new BuildPlan(i3 + (paramInt3 - 1) / 2, i4 + (paramInt3 - 1) / 2, 0, paramBlock));
+            paramIntSeq1.add(i4 * paramInt9 + i3);
+            mark(i3, i4, paramInt3, paramArrayOfboolean2, paramInt9);
+            mark(i3, i4, paramInt3, paramArrayOfboolean3, paramInt9);
+            b1++;
+            i1 += i5;
+            bool = true;
+          } 
+        } 
+        i2 += paramInt3;
+      } 
+      if (bool) {
+        b2++;
+        if (paramBoolean2 && b2 % 2 != 0) {
+          i += paramInt3;
+          continue;
+        } 
+        int i3 = i + paramInt3;
+        if (i3 < n)
+          paramIntSeq2.add(i3); 
+        i += paramInt3 + 1;
+        continue;
+      } 
+      i++;
+    } 
+    return new int[] { b1, i1 };
+  }
+  
+  private static int fillGaps(boolean paramBoolean, int paramInt1, int paramInt2, Item paramItem, boolean[] paramArrayOfboolean1, boolean[] paramArrayOfboolean2, boolean[] paramArrayOfboolean3, int paramInt3, int paramInt4, Block paramBlock, Seq<BuildPlan> paramSeq, IntSeq paramIntSeq1, IntSeq paramIntSeq2) {
+    if (paramIntSeq1.size == 0)
+      return 0; 
+    int i = Integer.MAX_VALUE;
+    int j = Integer.MAX_VALUE;
+    int k = 0;
+    int m = 0;
+    int n;
+    for (n = 0; n < paramIntSeq1.size; n++) {
+      int i1 = paramIntSeq1.get(n);
+      i = Math.min(i, i1 % paramInt3);
+      j = Math.min(j, i1 / paramInt3);
+      k = Math.max(k, i1 % paramInt3 + paramInt1 - 1);
+      m = Math.max(m, i1 / paramInt3 + paramInt1 - 1);
+    } 
+    n = Math.max(1, Math.min(paramInt2, (paramInt1 * paramInt1 + 2) / 3));
+    byte b1 = 0;
+    for (byte b2 = 0; b2 < 64; b2++) {
+      int i1 = -1;
+      int i2 = -1;
+      int i3 = 0;
+      for (int i4 = j; i4 + paramInt1 - 1 <= m; i4++) {
+        for (int i5 = i; i5 + paramInt1 - 1 <= k; i5++) {
+          int i6 = paramBoolean ? i5 : i4;
+          boolean bool = false;
+          int i7;
+          for (i7 = 0; i7 < paramIntSeq2.size; i7++) {
+            int i8 = paramIntSeq2.get(i7);
+            if (i8 >= i6 && i8 <= i6 + paramInt1 - 1) {
+              bool = true;
+              break;
+            } 
+          } 
+          if (!bool && canPlaceDrill(i5, i4, paramInt1, paramArrayOfboolean2, paramInt3, paramInt4)) {
+            i7 = countOre(i5, i4, paramInt1, paramItem, paramArrayOfboolean1, paramInt3);
+            if (i7 > i3) {
+              i3 = i7;
+              i1 = i5;
+              i2 = i4;
+            } 
+          } 
+        } 
+      } 
+      if (i1 < 0 || i3 < n)
+        break; 
+      paramSeq.add(new BuildPlan(i1 + (paramInt1 - 1) / 2, i2 + (paramInt1 - 1) / 2, 0, paramBlock));
+      paramIntSeq1.add(i2 * paramInt3 + i1);
+      mark(i1, i2, paramInt1, paramArrayOfboolean2, paramInt3);
+      mark(i1, i2, paramInt1, paramArrayOfboolean3, paramInt3);
+      b1++;
+    } 
+    return b1;
+  }
+  
+  private static int countOre(int paramInt1, int paramInt2, int paramInt3, Item paramItem, boolean[] paramArrayOfboolean, int paramInt4) {
+    byte b1 = 0;
+    byte b2 = 0;
+    HashMap<Object, Object> hashMap = null;
+    for (byte b3 = 0; b3 < paramInt3; b3++) {
+      for (byte b = 0; b < paramInt3; b++) {
+        int i = (paramInt2 + b3) * paramInt4 + paramInt1 + b;
+        Tile tile = Vars.world.tile(paramInt1 + b, paramInt2 + b3);
+        Item item = oreAt(tile);
+        if (item != null)
+          if (item == paramItem) {
+            b2++;
+          } else if (limitOn) {
+            if (hashMap == null)
+              hashMap = new HashMap<>(); 
+            Integer integer;
+            hashMap.put(item, Integer.valueOf(((integer = (Integer)hashMap.get(item)) == null) ? 1 : (integer.intValue() + 1)));
+          }  
+        if (paramArrayOfboolean[i] && sameOre(tile, paramItem))
+          b1++; 
+      } 
+    } 
+    if (limitOn && hashMap != null)
+      for (Map.Entry<Object, Object> entry : hashMap.entrySet()) {
+        Item item = (Item)entry.getKey();
+        int i = ((Integer)entry.getValue()).intValue();
+        if (item.lowPriority && !paramItem.lowPriority)
+          continue; 
+        if (!item.lowPriority && paramItem.lowPriority)
+          return -1; 
+        if (i <= b2 && (i != b2 || item.id <= paramItem.id))
+          continue; 
+        return -1;
+      }  
+    return b1;
+  }
+  
+  private static void mark(int paramInt1, int paramInt2, int paramInt3, boolean[] paramArrayOfboolean, int paramInt4) {
+    for (byte b = 0; b < paramInt3; b++) {
+      for (byte b1 = 0; b1 < paramInt3; b1++)
+        paramArrayOfboolean[(paramInt2 + b) * paramInt4 + paramInt1 + b1] = true; 
+    } 
+  }
+  
+  private static void fixRotations(Seq<BuildPlan> paramSeq, Block paramBlock, int paramInt) {
+    if (lastHub < 0 || paramSeq == null || paramSeq.isEmpty())
+      return; 
+    boolean[] arrayOfBoolean = new boolean[paramInt * Vars.world.height()];
+    int[] arrayOfInt1 = new int[paramInt * Vars.world.height()];
+    Arrays.fill(arrayOfInt1, -1);
+    for (byte b2 = 0; b2 < paramSeq.size; b2++) {
+      Object object = paramSeq.get(b2);
+      int i;
+      if (((BuildPlan)object).block == paramBlock && (i = ((BuildPlan)object).y * paramInt + ((BuildPlan)object).x) >= 0 && i < arrayOfBoolean.length) {
+        arrayOfBoolean[i] = true;
+        arrayOfInt1[i] = b2;
+      } 
+    } 
+    if (!arrayOfBoolean[lastHub])
+      return; 
+    int[] arrayOfInt2 = new int[arrayOfBoolean.length];
+    Arrays.fill(arrayOfInt2, -1);
+    IntQueue intQueue = new IntQueue();
+    intQueue.addLast(lastHub);
+    arrayOfInt2[lastHub] = lastHub;
+    while (!intQueue.isEmpty()) {
+      int k = intQueue.removeFirst();
+      int j = k % paramInt;
+      int i = k / paramInt;
+      for (byte b = 0; b < 4; b++) {
+        int i1 = j + DX[b];
+        int n = i + DY[b];
+        int m;
+        if (Vars.world.tiles.in(i1, n) && arrayOfInt2[m = n * paramInt + i1] < 0 && arrayOfBoolean[m]) {
+          arrayOfInt2[m] = k;
+          intQueue.addLast(m);
+        } 
+      } 
+    } 
+    for (byte b1 = 0; b1 < arrayOfBoolean.length; b1++) {
+      if (arrayOfBoolean[b1] && arrayOfInt2[b1] >= 0 && arrayOfInt2[b1] != b1) {
+        int n = arrayOfInt2[b1];
+        int m = b1 % paramInt;
+        int k = b1 / paramInt;
+        int j = n % paramInt;
+        int i = n / paramInt;
+        boolean bool = false;
+        bool = (j > m) ? false : ((j < m) ? true : ((i > k) ? true : true));
+        int i1 = arrayOfInt1[b1];
+        if (i1 >= 0) {
+          BuildPlan buildPlan = (BuildPlan)paramSeq.get(i1);
+          paramSeq.set(i1, new BuildPlan(buildPlan.x, buildPlan.y, bool, paramBlock));
+        } 
+      } 
+    } 
+  }
+  
+  private static Block resolveDrillFor(Item paramItem) {
+    Drill drill;
+    Block block = null;
+    if (limitOn && paramItem != null) {
+      String str = AutoSetConfig.drillFor(paramItem.name);
+      if (str != null && !str.isEmpty()) {
+        Block block1 = Vars.content.block(str);
+        if (block1 instanceof Drill)
+          block = block1; 
+      } 
+    } 
+    if (block == null)
+      block = resolveDrill(); 
+    if (paramItem != null && block instanceof Drill && ((Drill)block).tier < paramItem.hardness) {
+      Drill drill1 = null;
+      for (Block block1 : Vars.content.blocks()) {
+        if (!(block1 instanceof Drill))
+          continue; 
+        Drill drill2 = (Drill)block1;
+        if (drill2.tier < paramItem.hardness || (drill1 != null && drill2.tier >= drill1.tier && (drill2.tier != drill1.tier || drill2.size >= drill1.size)))
+          continue; 
+        drill1 = drill2;
+      } 
+      if (drill1 != null) {
+        if (!quiet)
+          toast(pt() ? (block.localizedName + " não minera " + block.localizedName + ": usando " + paramItem.localizedName) : (block.localizedName + " cannot mine " + block.localizedName + ": using " + paramItem.localizedName)); 
+        drill = drill1;
+      } 
+    } 
+    return (Block)drill;
+  }
+  
+  private static boolean pollutes(Block paramBlock) {
+    return (paramBlock instanceof Drill || paramBlock instanceof mindustry.world.blocks.production.GenericCrafter || paramBlock instanceof mindustry.world.blocks.storage.Unloader);
+  }
+  
+  private static void markAround(boolean[] paramArrayOfboolean, int paramInt1, int paramInt2, int paramInt3, int paramInt4) {
+    for (byte b = 0; b < 4; b++) {
+      int i = paramInt1 + DX[b];
+      int j = paramInt2 + DY[b];
+      if (i >= 0 && j >= 0 && i < paramInt3 && j < paramInt4)
+        paramArrayOfboolean[j * paramInt3 + i] = true; 
+    } 
+  }
+  
+  public static boolean[] reservedForFeed(Unit paramUnit) {
+    boolean[] arrayOfBoolean = AutoConnectConveyor.reservedFromPlans(paramUnit);
+    try {
+      int i = Vars.world.width();
+      int j = Vars.world.height();
+      for (byte b = 0; b < j; b++) {
+        for (byte b1 = 0; b1 < i; b1++) {
+          Tile tile = Vars.world.tile(b1, b);
+          if (tile != null && tile.build != null && tile.build.block != null && pollutes(tile.build.block))
+            markAround(arrayOfBoolean, b1, b, i, j); 
+        } 
+      } 
+      for (BuildPlan buildPlan : paramUnit.plans()) {
+        if (buildPlan.breaking || buildPlan.block == null || !pollutes(buildPlan.block))
+          continue; 
+        int k = buildPlan.block.size;
+        int m = (k - 1) / 2;
+        for (byte b1 = 0; b1 < k; b1++) {
+          for (byte b2 = 0; b2 < k; b2++)
+            markAround(arrayOfBoolean, buildPlan.x - m + b2, buildPlan.y - m + b1, i, j); 
+        } 
+      } 
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] reservedForFeed", throwable);
+      } 
+    } 
+    return arrayOfBoolean;
+  }
+  
+  private static Seq<BuildPlan> pruneConveyors(Seq<BuildPlan> paramSeq, Block paramBlock, int paramInt) {
+    try {
+      if (lastHub < 0 || paramSeq == null || paramSeq.isEmpty())
+        return paramSeq; 
+      int j = Vars.world.height();
+      int[] arrayOfInt1 = new int[paramInt * j];
+      Arrays.fill(arrayOfInt1, -1);
+      ArrayList<BuildPlan> arrayList = new ArrayList();
+      HashMap<Object, Object> hashMap = new HashMap<>();
+      byte b3 = 0;
+      int i;
+      for (i = 0; i < paramSeq.size; i++) {
+        BuildPlan buildPlan = (BuildPlan)paramSeq.get(i);
+        if (buildPlan.block == paramBlock) {
+          if (buildPlan.x >= 0 && buildPlan.y >= 0 && buildPlan.x < paramInt && buildPlan.y < j) {
+            arrayOfInt1[buildPlan.y * paramInt + buildPlan.x] = arrayList.size();
+            arrayList.add(buildPlan);
+          } 
+        } else if (buildPlan.block instanceof Drill) {
+          int m = buildPlan.block.size;
+          int n = (m - 1) / 2;
+          for (byte b = 0; b < m; b++) {
+            for (byte b5 = 0; b5 < m; b5++)
+              hashMap.put(Integer.valueOf((buildPlan.y - n + b) * paramInt + buildPlan.x - n + b5), Integer.valueOf(b3)); 
+          } 
+          b3++;
+        } 
+      } 
+      i = arrayList.size();
+      if (i == 0 || arrayOfInt1[lastHub] < 0)
+        return paramSeq; 
+      int k = arrayOfInt1[lastHub];
+      int[] arrayOfInt2 = new int[i];
+      int[][] arrayOfInt = new int[i][];
+      for (byte b2 = 0; b2 < i; b2++) {
+        BuildPlan buildPlan = arrayList.get(b2);
+        int i1 = buildPlan.rotation & 0x3;
+        int n = buildPlan.x + DX[i1];
+        int m = buildPlan.y + DY[i1];
+        arrayOfInt2[b2] = (n < 0 || m < 0 || n >= paramInt || m >= j) ? -1 : arrayOfInt1[m * paramInt + n];
+        ArrayList<Integer> arrayList1 = new ArrayList();
+        byte b;
+        for (b = 0; b < 4; b++) {
+          if (b != i1) {
+            int i3 = buildPlan.x + DX[b];
+            int i2 = buildPlan.y + DY[b];
+            Integer integer;
+            if (i3 >= 0 && i2 >= 0 && i3 < paramInt && i2 < j && (integer = (Integer)hashMap.get(Integer.valueOf(i2 * paramInt + i3))) != null && !arrayList1.contains(integer))
+              arrayList1.add(integer); 
+          } 
+        } 
+        arrayOfInt[b2] = new int[arrayList1.size()];
+        for (b = 0; b < arrayList1.size(); b++)
+          arrayOfInt[b2][b] = ((Integer)arrayList1.get(b)).intValue(); 
+      } 
+      boolean[] arrayOfBoolean = new boolean[i];
+      byte b1;
+      for (b1 = 0; b1 < i; b1++) {
+        int m = b1;
+        for (byte b = 0; m >= 0 && b <= i; b++) {
+          if (m == k) {
+            arrayOfBoolean[b1] = true;
+            break;
+          } 
+          m = arrayOfInt2[m];
+        } 
+      } 
+      b1 = 1;
+      while (b1 != 0) {
+        b1 = 0;
+        int[] arrayOfInt3 = new int[i];
+        for (byte b6 = 0; b6 < i; b6++) {
+          if (arrayOfBoolean[b6] && arrayOfInt2[b6] >= 0 && arrayOfBoolean[arrayOfInt2[b6]]) {
+            int[] arrayOfInt5 = arrayOfInt3;
+            int m = arrayOfInt2[b6];
+            arrayOfInt5[m] = arrayOfInt5[m] + 1;
+          } 
+        } 
+        int[] arrayOfInt4 = new int[Math.max(1, b3)];
+        byte b5;
+        for (b5 = 0; b5 < i; b5++) {
+          if (arrayOfBoolean[b5]) {
+            int[] arrayOfInt5 = arrayOfInt[b5];
+            int m = arrayOfInt5.length;
+            for (byte b = 0; b < m; b++) {
+              int n = arrayOfInt5[b], i1 = n;
+              arrayOfInt4[i1] = arrayOfInt4[i1] + 1;
+            } 
+          } 
+        } 
+        for (b5 = 0; b5 < i; b5++) {
+          if (arrayOfBoolean[b5] && b5 != k && arrayOfInt3[b5] <= 0) {
+            boolean bool = false;
+            int[] arrayOfInt5 = arrayOfInt[b5];
+            int m = arrayOfInt5.length;
+            byte b;
+            for (b = 0; b < m; ) {
+              int n = arrayOfInt5[b];
+              if (arrayOfInt4[n] > 1) {
+                b++;
+                continue;
+              } 
+              bool = true;
+            } 
+            if (!bool) {
+              arrayOfBoolean[b5] = false;
+              b1 = 1;
+              arrayOfInt5 = arrayOfInt[b5];
+              m = arrayOfInt5.length;
+              for (b = 0; b < m; b++) {
+                int n = arrayOfInt5[b], i1 = n;
+                arrayOfInt4[i1] = arrayOfInt4[i1] - 1;
+              } 
+            } 
+          } 
+        } 
+      } 
+      Seq<BuildPlan> seq = new Seq();
+      for (byte b4 = 0; b4 < paramSeq.size; b4++) {
+        BuildPlan buildPlan = (BuildPlan)paramSeq.get(b4);
+        int m;
+        if (buildPlan.block != paramBlock || buildPlan.x < 0 || buildPlan.y < 0 || buildPlan.x >= paramInt || buildPlan.y >= j || (m = arrayOfInt1[buildPlan.y * paramInt + buildPlan.x]) < 0 || arrayOfBoolean[m])
+          seq.add(buildPlan); 
+      } 
+      return seq;
+    } catch (Throwable throwable) {
+      if (!errorLogged) {
+        errorLogged = true;
+        Log.err("[Lunarians] pruneConveyors", throwable);
+      } 
+      return paramSeq;
+    } 
+  }
+  
+  private static boolean pt() {
+    return "pt".equals(LunariansSettings.language);
+  }
+  
+  private static void toast(String paramString) {
+    if (Vars.ui != null)
+      Vars.ui.showInfoToast(paramString, 3.5F); 
+  }
+  
+  public static int isoOverride = -1;
+  
+  private static boolean failedNoneFit;
+  
+  static {
+    lastPlans = new Seq();
+    lastDrillTiles = new IntSeq();
+    lastHub = -1;
+  }
 }

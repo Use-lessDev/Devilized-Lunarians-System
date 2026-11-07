@@ -1,54 +1,44 @@
 package lunarians.ui;
 
 import arc.math.Interp;
+import arc.scene.Action;
 import arc.scene.actions.Actions;
 import arc.scene.ui.layout.Table;
 import arc.util.Log;
 import lunarians.LunariansSettings;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/ui/PanelMinimizeAnimation.class */
 public final class PanelMinimizeAnimation {
-    private static final float DURATION = 0.24f;
-    private static final float HEADER_HEIGHT = 40.0f;
-
-    private PanelMinimizeAnimation() {
-    }
-
-    public static void toggle(final SchematicPanel schematicPanel) {
-        if (schematicPanel == null) {
-            return;
-        }
-        try {
-            boolean z = !LunariansSettings.panelMinimized;
-            final boolean z2 = z;
-            LunariansSettings.panelMinimized = z;
-            LunariansSettings.save();
-            final Table body = schematicPanel.getBody();
-            if (body != null) {
-                body.visible = true;
-            }
-            float height = schematicPanel.getHeight();
-            float panelHeight = z2 ? HEADER_HEIGHT : PanelLayout.panelHeight();
-            float f = (schematicPanel.y + height) - panelHeight;
-            schematicPanel.clearActions();
-            schematicPanel.addAction(Actions.sequence(Actions.parallel(Actions.sizeTo(schematicPanel.getWidth(), panelHeight, DURATION, Interp.smooth), Actions.moveTo(schematicPanel.x, f, DURATION, Interp.smooth)), Actions.run(new Runnable() { // from class: lunarians.ui.PanelMinimizeAnimation.1
-                @Override // java.lang.Runnable
+  private static final float DURATION = 0.24F;
+  
+  private static final float HEADER_HEIGHT = 40.0F;
+  
+  public static void toggle(final SchematicPanel schematicPanel) {
+    if (schematicPanel == null)
+      return; 
+    try {
+      boolean bool1 = LunariansSettings.panelMinimized;
+      final boolean bl = !bool1 ? true : false;
+      LunariansSettings.save();
+      final Table table = schematicPanel.getBody();
+      if (table != null)
+        table.visible = true; 
+      float f1 = schematicPanel.getHeight();
+      float f2 = bool ? 40.0F : PanelLayout.panelHeight();
+      float f3 = schematicPanel.y + f1 - f2;
+      schematicPanel.clearActions();
+      schematicPanel.addAction((Action)Actions.sequence((Action)Actions.parallel((Action)Actions.sizeTo(schematicPanel.getWidth(), f2, 0.24F, Interp.smooth), (Action)Actions.moveTo(schematicPanel.x, f3, 0.24F, Interp.smooth)), (Action)Actions.run(new Runnable() {
                 public void run() {
-                    if (body != null) {
-                        body.visible = !z2;
-                    }
-                    schematicPanel.invalidateHierarchy();
-                    LunariansSettings.panelX = schematicPanel.x;
-                    LunariansSettings.panelY = schematicPanel.y;
-                    LunariansSettings.save();
+                  if (table != null)
+                    table.visible = !bl; 
+                  schematicPanel.invalidateHierarchy();
+                  LunariansSettings.panelX = schematicPanel.x;
+                  LunariansSettings.panelY = schematicPanel.y;
+                  LunariansSettings.save();
                 }
-            })));
-        } catch (Throwable th) {
-            Log.err("[Lunarians] minimize animation failed", th);
-            schematicPanel.applySettings();
-        }
-    }
+              })));
+    } catch (Throwable throwable) {
+      Log.err("[Lunarians] minimize animation failed", throwable);
+      schematicPanel.applySettings();
+    } 
+  }
 }

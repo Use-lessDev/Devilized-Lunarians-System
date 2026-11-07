@@ -2,175 +2,112 @@ package lunarians;
 
 import arc.Core;
 import arc.Events;
-import arc.func.Cons;
 import arc.util.Log;
 import arc.util.Time;
 import mindustry.Vars;
-import mindustry.core.UI;
 import mindustry.game.EventType;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/ServerGuard.class */
 public class ServerGuard {
-    private static boolean registered;
-    private static boolean forced;
-    private static float lastCheck;
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.ServerGuard$0, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass0 implements Cons {
-        public final void get(Object obj) {
-            ServerGuard.check();
-        }
-    }
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.ServerGuard$1, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass1 implements Cons {
-        public final void get(Object obj) {
-            ServerGuard.check();
-        }
-    }
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.ServerGuard$2, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass2 implements Runnable {
-        @Override // java.lang.Runnable
-        public final void run() {
-            ServerGuard.lambda$init$2();
-        }
-    }
-
-    public static void init() {
-        if (registered) {
-            return;
-        }
-        registered = true;
-        Events.on(EventType.ClientLoadEvent.class, clientLoadEvent -> {
-            check();
+  private static boolean registered;
+  
+  private static boolean forced;
+  
+  private static float lastCheck;
+  
+  public static void init() {
+    if (registered)
+      return; 
+    registered = true;
+    Events.on(EventType.ClientLoadEvent.class, paramClientLoadEvent -> check());
+    Events.on(EventType.WorldLoadEvent.class, paramWorldLoadEvent -> check());
+    Events.run(EventType.Trigger.update, () -> {
+          if (Vars.state != null && Vars.state.isGame() && TimeOk())
+            checkLight(); 
         });
-        Events.on(EventType.WorldLoadEvent.class, worldLoadEvent -> {
-            check();
-        });
-        Events.run(EventType.Trigger.update, () -> {
-            if (Vars.state == null || !Vars.state.isGame() || !TimeOk()) {
-                return;
-            }
-            checkLight();
-        });
-    }
-
-    private static boolean TimeOk() {
-        float f = Time.time;
-        if (f - lastCheck < 180.0f) {
-            return false;
-        }
-        lastCheck = f;
-        return true;
-    }
-
-    private static void checkLight() {
-        String str;
-        try {
-            if (isRestrictedServer() && !LunariansSettings.pvpMode) {
-                LunariansSettings.pvpMode = true;
-                LunariansSettings.save();
-                forced = true;
-                if (Vars.ui != null) {
-                    UI ui = Vars.ui;
-                    if ("pt".equals(LunariansSettings.language)) {
-                        str = "Servidor restrito → Balanced ON";
-                    } else {
-                        str = "Restricted server → Balanced ON";
-                    }
-                    ui.showInfoToast(str, 4.0f);
-                }
-            }
-        } catch (Throwable th) {
-        }
-    }
-
-    public static void check() {
-        String str;
-        try {
-            if (isRestrictedServer() && !LunariansSettings.pvpMode) {
-                LunariansSettings.pvpMode = true;
-                LunariansSettings.save();
-                forced = true;
-                Log.info("[Lunarians] Restricted server detected → Balanced mode forced");
-                if (Vars.ui != null) {
-                    UI ui = Vars.ui;
-                    if ("pt".equals(LunariansSettings.language)) {
-                        str = "Servidor tipo Fish → modo Balanced";
-                    } else {
-                        str = "Fish-like server → Balanced mode";
-                    }
-                    ui.showInfoToast(str, 4.0f);
-                }
-            }
-        } catch (Throwable th) {
-            Log.err("[Lunarians] ServerGuard", th);
-        }
-    }
-
-    public static boolean isRestrictedServer() {
-        if (Vars.net == null || !Vars.net.client()) {
-            return false;
-        }
-        try {
-            try {
-                if (Vars.ui != null) {
-                    if (Vars.ui.join != null) {
-                    }
-                }
-            } catch (Throwable th) {
-                return false;
-            }
-        } catch (Throwable th2) {
-        }
-        try {
-            if (Vars.platform != null) {
-            }
-        } catch (Throwable th3) {
-        }
-        String lowerCase = (Core.settings.getString("last-server-ip", "") + " " + Core.settings.getString("last-server-name", "")).toLowerCase();
-        if (lowerCase.contains("fish") || lowerCase.contains("xpdustry") || lowerCase.contains("darkdustry") || lowerCase.contains("mindustry.ddns")) {
-            return true;
-        }
-        try {
-            if (Vars.player != null) {
-                if (Vars.player.name != null) {
-                }
-            }
-        } catch (Throwable th4) {
-        }
-        try {
-            if (Vars.net != null) {
-                if (String.valueOf(Vars.net).toLowerCase().contains("fish")) {
-                    return true;
-                }
-            }
-        } catch (Throwable th5) {
-        }
-        try {
-            if (Vars.state != null && Vars.state.rules != null) {
-                String str = Vars.state.rules.modeName != null ? Vars.state.rules.modeName : "";
-                if ((str.toLowerCase().contains("fish") || str.toLowerCase().contains("pvp")) && Vars.net.client()) {
-                    if (!lowerCase.contains("fish")) {
-                        if (!str.toLowerCase().contains("fish")) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            }
-        } catch (Throwable th6) {
-        }
-        return lowerCase.contains("fish");
-    }
+  }
+  
+  private static boolean TimeOk() {
+    float f = Time.time;
+    if (f - lastCheck < 180.0F)
+      return false; 
+    lastCheck = f;
+    return true;
+  }
+  
+  private static void checkLight() {
+    try {
+      if (isRestrictedServer() && !LunariansSettings.pvpMode) {
+        LunariansSettings.pvpMode = true;
+        LunariansSettings.save();
+        forced = true;
+        if (Vars.ui != null)
+          Vars.ui.showInfoToast(
+              "pt".equals(LunariansSettings.language) ? 
+              "Servidor restrito → Balanced ON" : 
+              "Restricted server → Balanced ON", 4.0F); 
+      } 
+    } catch (Throwable throwable) {}
+  }
+  
+  public static void check() {
+    try {
+      if (isRestrictedServer() && 
+        !LunariansSettings.pvpMode) {
+        LunariansSettings.pvpMode = true;
+        LunariansSettings.save();
+        forced = true;
+        Log.info("[Lunarians] Restricted server detected → Balanced mode forced");
+        if (Vars.ui != null)
+          Vars.ui.showInfoToast(
+              "pt".equals(LunariansSettings.language) ? 
+              "Servidor tipo Fish → modo Balanced" : 
+              "Fish-like server → Balanced mode", 4.0F); 
+      } 
+    } catch (Throwable throwable) {
+      Log.err("[Lunarians] ServerGuard", throwable);
+    } 
+  }
+  
+  public static boolean isRestrictedServer() {
+    if (Vars.net == null || !Vars.net.client())
+      return false; 
+    try {
+      String str1 = "";
+      try {
+        if (Vars.ui == null || Vars.ui.join != null);
+      } catch (Throwable throwable) {}
+      try {
+        Object object = null;
+        if (Vars.platform != null);
+      } catch (Throwable throwable) {}
+      String str2 = Core.settings.getString("last-server-ip", "");
+      String str3 = Core.settings.getString("last-server-name", "");
+      String str4 = (str2 + " " + str2).toLowerCase();
+      if (str4.contains("fish") || str4.contains("xpdustry") || str4
+        .contains("darkdustry") || str4.contains("mindustry.ddns"))
+        return true; 
+      try {
+        String str = "";
+        if (Vars.player == null || Vars.player.name != null);
+      } catch (Throwable throwable) {}
+      try {
+        if (Vars.net != null) {
+          String str = String.valueOf(Vars.net);
+          if (str.toLowerCase().contains("fish"))
+            return true; 
+        } 
+      } catch (Throwable throwable) {}
+      try {
+        if (Vars.state != null && Vars.state.rules != null) {
+          String str = (Vars.state.rules.modeName != null) ? Vars.state.rules.modeName : "";
+          if (str.toLowerCase().contains("fish") || str.toLowerCase().contains("pvp"))
+            if (Vars.net.client())
+              return (str4.contains("fish") || str.toLowerCase().contains("fish"));  
+        } 
+      } catch (Throwable throwable) {}
+      return str4.contains("fish");
+    } catch (Throwable throwable) {
+      return false;
+    } 
+  }
 }

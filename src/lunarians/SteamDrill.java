@@ -1,6 +1,5 @@
 package lunarians;
 
-import arc.func.Cons;
 import arc.math.Mathf;
 import arc.math.geom.Point2;
 import arc.struct.Seq;
@@ -11,7 +10,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import mindustry.Vars;
 import mindustry.content.Items;
 import mindustry.content.Liquids;
@@ -26,541 +24,454 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.power.PowerNode;
 import mindustry.world.blocks.storage.CoreBlock;
 
-/* JADX WARN: Classes with same name are omitted:
-  classes.dex
- */
-/* loaded from: Lunarians-v3_78_0-PC-Mobile (1).jar:lunarians/SteamDrill.class */
 public class SteamDrill {
-    static final String B64 = "bXNjaAF4nEWOzUrDQBSFT/NvgnbjQlyFulFowEUrbgW7EKwbFRchi0kzLQNpUidTtYjv4CPUZ3DhW9UnKHonTemFuZfLPec7Awd7FvxRWSheqCGbwXj/gJOzlOcVjuPV8rP7+/XT7cQnl/0eG4+T1fI7TjoJrIJNOY7uFWfT8FqKPA/PL8LBm3oKT3v9MwQZr0ZSzJQoCwTpwn+8fbgZXt0NPLQrbYomvOCSqVJiPxfPc5FFspwrLnGQSpFNeES/yuZCIchZxWWU6RA4jai9E73wBUH8WflKqqLMONytFTikBxNo0bABg4bj/jWlb3D1vVULqJHGIpUJ06ZhudiUBb26O6devfragMyN36wjtJ+CqNmeBhs1sg5eN0RTBxs6bAfVq72FrolmEYN0Ng3jH04dbjI=";
-    static final int[] DX = {1, 0, -1, 0};
-    static final int[] DY = {0, 1, 0, -1};
-    public static final ArrayList<Integer> lastTiles = new ArrayList<>();
-    public static String lastError = "";
-    private static Schematic schem;
-
-    /* compiled from: D8$$SyntheticClass */
-    /* renamed from: lunarians.SteamDrill$0, reason: invalid class name */
-    /* loaded from: classes.dex */
-    public final /* synthetic */ class AnonymousClass0 implements Cons {
-        public final void get(Object obj) {
-            SteamDrill.lambda$rotateOnce$0((Point2) obj);
-        }
-    }
-
-    private static String tr(String str, String str2, String str3, String str4) {
-        return AutoSetConfig.tr4(str, str2, str3, str4);
-    }
-
-    private static Schematic schematic() {
-        if (schem == null) {
-            try {
-                schem = Schematics.readBase64(B64);
-            } catch (Throwable th) {
-                Log.err("[Lunarians] steam schematic", th);
-            }
-        }
-        return schem;
-    }
-
-    private static void rotateOnce(Seq<BuildPlan> seq, int i, int i2) {
-        for (int i3 = 0; i3 < seq.size; i3++) {
-            BuildPlan buildPlan = (BuildPlan) seq.get(i3);
-            if (!buildPlan.breaking && buildPlan.block != null) {
-                float f = buildPlan.block.offset;
-                buildPlan.x = Math.round(((-(((buildPlan.y - i2) * 8.0f) + f)) - f) / 8.0f) + i;
-                buildPlan.y = Math.round(((((buildPlan.x - i) * 8.0f) + f) - f) / 8.0f) + i2;
-                buildPlan.rotation = buildPlan.block.planRotation(Mathf.mod(buildPlan.rotation + 1, 4));
-                buildPlan.pointConfig(point2 -> {
-                    point2.set(-point2.y, point2.x);
-                });
-            }
-        }
-    }
-
-    private static boolean inside(int i, int i2) {
-        return Vars.world.tiles.in(i, i2);
-    }
-
-    private static void footprint(Block block, int i, int i2, HashSet<Integer> hashSet) {
-        int width = Vars.world.width();
-        int i3 = (block.size - 1) / 2;
-        for (int i4 = 0; i4 < block.size; i4++) {
-            for (int i5 = 0; i5 < block.size; i5++) {
-                hashSet.add(Integer.valueOf((((i2 - i3) + i4) * width) + (i - i3) + i5));
-            }
-        }
-    }
-
-    private static boolean freeArea(Block block, int i, int i2, boolean[] zArr, HashSet<Integer> hashSet) {
-        int width = Vars.world.width();
-        int i3 = (block.size - 1) / 2;
-        for (int i4 = 0; i4 < block.size; i4++) {
-            for (int i5 = 0; i5 < block.size; i5++) {
-                int i6 = (i - i3) + i5;
-                int i7 = (i2 - i3) + i4;
-                if (!inside(i6, i7)) {
-                    return false;
-                }
-                int i8 = (i7 * width) + i6;
-                if (zArr[i8]) {
-                    return false;
-                }
-                if (hashSet != null && hashSet.contains(Integer.valueOf(i8))) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private static boolean canPlace(Block block, int i, int i2, int i3) {
-        try {
-            return Build.validPlace(block, Vars.player.team(), i, i2, i3);
-        } catch (Throwable th) {
-            return false;
-        }
-    }
-
-    private static int waterTiles(int i, int i2) {
-        int i3 = 0;
-        for (int i4 = 0; i4 < 2; i4++) {
-            for (int i5 = 0; i5 < 2; i5++) {
-                Tile tile = Vars.world.tile(i + i5, i2 + i4);
-                if (tile == null || tile.build != null) {
-                    return -1;
-                }
-                if (tile.floor() != null && tile.floor().liquidDrop == Liquids.water) {
-                    i3++;
-                }
-            }
-        }
-        return i3;
-    }
-
-    private static boolean affordable(Block block, int i) {
-        if (Vars.state.rules.infiniteResources) {
-            return true;
-        }
-        CoreBlock.CoreBuild closestCore = Vars.player.closestCore();
-        if (closestCore == null) {
-            return false;
-        }
-        for (ItemStack itemStack : block.requirements) {
-            if (closestCore.items.get(itemStack.item) < itemStack.amount * i) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public static Seq<BuildPlan> plan(Unit unit, int i, int i2, float f, boolean[] zArr) {
-        lastTiles.clear();
-        lastError = "";
-        try {
-            return planInner(unit, i, i2, f, zArr);
-        } catch (Throwable th) {
-            Log.err("[Lunarians] SteamDrill", th);
-            lastError = "error";
-            return null;
-        }
-    }
-
-    /* JADX WARN: Code restructure failed: missing block: B:285:0x082d, code lost:
-    
-        r32 = r32 + 1;
-     */
-    /*
-        Code decompiled incorrectly, please refer to instructions dump.
-    */
-    private static Seq<BuildPlan> planInner(Unit unit, int i, int i2, float f, boolean[] zArr) {
-        String tr;
-        int intValue;
-        int i3;
-        int waterTiles;
-        Schematic schematic = schematic();
-        Block block = Vars.content.block("laser-drill");
-        Block block2 = Vars.content.block("rotary-pump");
-        Block block3 = Vars.content.block("conduit");
-        if (schematic == null || block == null || block2 == null || block3 == null || Vars.player.closestCore() == null) {
-            lastError = tr("Blocos indisponíveis", "Blocks unavailable", "Bloques no disponibles", "Блоки недоступны");
-            return null;
-        }
-        int width = Vars.world.width();
-        boolean[] reservedFromPlans = AutoConnectConveyor.reservedFromPlans(unit);
-        if (zArr != null) {
-            for (int i4 = 0; i4 < zArr.length && i4 < reservedFromPlans.length; i4++) {
-                if (zArr[i4]) {
-                    reservedFromPlans[i4] = true;
-                }
-            }
-        }
-        int tileX = Vars.player.closestCore().tileX();
-        int tileY = Vars.player.closestCore().tileY();
-        int steamMinCoal = AutoSetConfig.steamMinCoal();
-        ArrayList arrayList = new ArrayList();
-        int ceil = (int) Math.ceil(f);
-        for (int i5 = i2 - ceil; i5 <= i2 + ceil; i5++) {
-            for (int i6 = i - ceil; i6 <= i + ceil; i6++) {
-                if (inside(i6, i5) && Mathf.dst(i6, i5, i, i2) <= f - 2.0f) {
-                    int i7 = 0;
-                    boolean z = false;
-                    for (int i8 = -1; i8 <= 1 && !z; i8++) {
-                        for (int i9 = -1; i9 <= 1; i9++) {
-                            Tile tile = Vars.world.tile(i6 + i9, i5 + i8);
-                            if (tile == null || tile.build != null || reservedFromPlans[((i5 + i8) * width) + i6 + i9]) {
-                                z = true;
-                                break;
-                            }
-                            if (tile.drop() == Items.coal) {
-                                i7++;
-                            }
-                        }
-                    }
-                    if (!z && i7 >= steamMinCoal) {
-                        arrayList.add(new int[]{i6, i5, i7, (int) (Mathf.dst(i6, i5, tileX, tileY) * 4.0f)});
-                    }
-                }
-            }
-        }
-        if (arrayList.isEmpty()) {
-            lastError = tr("Sem carvão 3x3 livre", "No free 3x3 coal", "Sin carbón 3x3 libre", "Нет свободного угля 3x3");
-            return null;
-        }
-        Collections.sort(arrayList, new Comparator<int[]>() { // from class: lunarians.SteamDrill.1
-            @Override // java.util.Comparator
-            public int compare(int[] iArr, int[] iArr2) {
-                return (((9 - iArr[2]) * 60) + iArr[3]) - (((9 - iArr2[2]) * 60) + iArr2[3]);
-            }
-        });
-        HashMap hashMap = new HashMap();
-        boolean z2 = false;
-        Seq seq = null;
-        ArrayList arrayList2 = null;
-        int[] iArr = null;
-        int i10 = Integer.MAX_VALUE;
-        int i11 = 0;
-        int i12 = 0;
-        while (i12 < arrayList.size() && i11 < 28) {
-            int[] iArr2 = (int[]) arrayList.get(i12);
-            int i13 = 0;
-            while (true) {
-                if (i13 < 4) {
-                    Seq plans = Vars.schematics.toPlans(schematic, 0, 0);
-                    BuildPlan buildPlan = null;
-                    Iterator it = plans.iterator();
-                    while (true) {
-                        if (!it.hasNext()) {
-                            break;
-                        }
-                        BuildPlan buildPlan2 = (BuildPlan) it.next();
-                        if (buildPlan2.block == block) {
-                            buildPlan = buildPlan2;
-                            break;
-                        }
-                    }
-                    if (buildPlan == null) {
-                        lastError = "schematic";
-                        return null;
-                    }
-                    int i14 = iArr2[0] - buildPlan.x;
-                    int i15 = iArr2[1] - buildPlan.y;
-                    Iterator it2 = plans.iterator();
-                    while (it2.hasNext()) {
-                        BuildPlan buildPlan3 = (BuildPlan) it2.next();
-                        buildPlan3.x += i14;
-                        buildPlan3.y += i15;
-                    }
-                    for (int i16 = 0; i16 < i13; i16++) {
-                        rotateOnce(plans, iArr2[0], iArr2[1]);
-                    }
-                    boolean z3 = true;
-                    HashSet hashSet = new HashSet();
-                    Iterator it3 = plans.iterator();
-                    while (it3.hasNext()) {
-                        BuildPlan buildPlan4 = (BuildPlan) it3.next();
-                        if (buildPlan4.block == null || !freeArea(buildPlan4.block, buildPlan4.x, buildPlan4.y, reservedFromPlans, null) || !canPlace(buildPlan4.block, buildPlan4.x, buildPlan4.y, buildPlan4.rotation)) {
-                            z3 = false;
-                            break;
-                        }
-                        footprint(buildPlan4.block, buildPlan4.x, buildPlan4.y, hashSet);
-                    }
-                    if (z3) {
-                        BuildPlan buildPlan5 = null;
-                        BuildPlan buildPlan6 = null;
-                        Iterator it4 = plans.iterator();
-                        while (it4.hasNext()) {
-                            BuildPlan buildPlan7 = (BuildPlan) it4.next();
-                            if (buildPlan7.block == block3) {
-                                buildPlan5 = buildPlan7;
-                            }
-                            if ((buildPlan7.block instanceof PowerNode) && buildPlan6 == null) {
-                                buildPlan6 = buildPlan7;
-                            }
-                        }
-                        if (buildPlan5 != null) {
-                            i11++;
-                            int i17 = buildPlan5.x - DX[buildPlan5.rotation & 3];
-                            int i18 = buildPlan5.y - DY[buildPlan5.rotation & 3];
-                            if (inside(i17, i18) && !reservedFromPlans[(i18 * width) + i17] && !hashSet.contains(Integer.valueOf((i18 * width) + i17)) && canPlace(block3, i17, i18, 0)) {
-                                HashMap hashMap2 = new HashMap();
-                                HashMap hashMap3 = new HashMap();
-                                ArrayDeque arrayDeque = new ArrayDeque();
-                                int i19 = (i18 * width) + i17;
-                                hashMap2.put(Integer.valueOf(i19), -1);
-                                hashMap3.put(Integer.valueOf(i19), 0);
-                                arrayDeque.add(Integer.valueOf(i19));
-                                int[] iArr3 = null;
-                                int[] iArr4 = null;
-                                while (!arrayDeque.isEmpty()) {
-                                    int intValue2 = ((Integer) arrayDeque.poll()).intValue();
-                                    int i20 = intValue2 % width;
-                                    int i21 = intValue2 / width;
-                                    int intValue3 = ((Integer) hashMap3.get(Integer.valueOf(intValue2))).intValue();
-                                    for (int i22 = 0; i22 < 4; i22++) {
-                                        int i23 = i20 + DX[i22];
-                                        int i24 = i21 + DY[i22];
-                                        for (int i25 = i23 - 1; i25 <= i23; i25++) {
-                                            for (int i26 = i24 - 1; i26 <= i24; i26++) {
-                                                if ((i20 < i25 || i20 > i25 + 1 || i21 < i26 || i21 > i26 + 1) && (waterTiles = waterTiles(i25, i26)) >= 2) {
-                                                    z2 = true;
-                                                    if ((waterTiles >= 4 || iArr3 == null) && freeArea(block2, i25, i26, reservedFromPlans, hashSet) && canPlace(block2, i25, i26, 0)) {
-                                                        boolean z4 = false;
-                                                        int i27 = intValue2;
-                                                        while (true) {
-                                                            int i28 = i27;
-                                                            if (i28 == -1) {
-                                                                break;
-                                                            }
-                                                            int i29 = i28 % width;
-                                                            int i30 = i28 / width;
-                                                            if (i29 < i25 || i29 > i25 + 1 || i30 < i26 || i30 > i26 + 1) {
-                                                                i27 = ((Integer) hashMap2.get(Integer.valueOf(i28))).intValue();
-                                                            } else {
-                                                                z4 = true;
-                                                                break;
-                                                            }
-                                                        }
-                                                        if (!z4) {
-                                                            if (waterTiles == 4) {
-                                                                iArr3 = new int[]{intValue2, i25, i26, 4};
-                                                            } else if (iArr4 == null) {
-                                                                iArr4 = new int[]{intValue2, i25, i26, waterTiles};
-                                                            }
-                                                            if (iArr3 != null) {
-                                                                break;
-                                                            }
-                                                        } else {
-                                                            continue;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            if (iArr3 != null) {
-                                                break;
-                                            }
-                                        }
-                                        if (iArr3 != null) {
-                                            break;
-                                        }
-                                    }
-                                    if (iArr3 != null) {
-                                        break;
-                                    }
-                                    if (intValue3 < 48) {
-                                        for (int i31 = 0; i31 < 4; i31++) {
-                                            int i32 = i20 + DX[i31];
-                                            int i33 = i21 + DY[i31];
-                                            if (inside(i32, i33)) {
-                                                int i34 = (i33 * width) + i32;
-                                                if (!hashMap2.containsKey(Integer.valueOf(i34)) && !reservedFromPlans[i34] && !hashSet.contains(Integer.valueOf(i34))) {
-                                                    Boolean bool = (Boolean) hashMap.get(Integer.valueOf(i34));
-                                                    if (bool == null) {
-                                                        bool = Boolean.valueOf(canPlace(block3, i32, i33, 0));
-                                                        hashMap.put(Integer.valueOf(i34), bool);
-                                                    }
-                                                    if (bool.booleanValue()) {
-                                                        hashMap2.put(Integer.valueOf(i34), Integer.valueOf(intValue2));
-                                                        hashMap3.put(Integer.valueOf(i34), Integer.valueOf(intValue3 + 1));
-                                                        arrayDeque.add(Integer.valueOf(i34));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if (iArr3 == null) {
-                                    iArr3 = iArr4;
-                                }
-                                if (iArr3 != null && (intValue = (((Integer) hashMap3.get(Integer.valueOf(iArr3[0]))).intValue() * 10) + ((9 - iArr2[2]) * 25) + (iArr2[3] / 4) + ((4 - iArr3[3]) * 30)) < i10) {
-                                    i10 = intValue;
-                                    seq = plans;
-                                    iArr = new int[]{iArr3[1], iArr3[2]};
-                                    ArrayList arrayList3 = new ArrayList();
-                                    int i35 = iArr3[0];
-                                    while (true) {
-                                        int i36 = i35;
-                                        if (i36 == -1) {
-                                            break;
-                                        }
-                                        int intValue4 = ((Integer) hashMap2.get(Integer.valueOf(i36))).intValue();
-                                        int i37 = i36 % width;
-                                        int i38 = i36 / width;
-                                        if (intValue4 == -1) {
-                                            i3 = buildPlan5.rotation & 3;
-                                        } else {
-                                            int i39 = intValue4 % width;
-                                            i3 = i39 > i37 ? 0 : i39 < i37 ? 2 : intValue4 / width > i38 ? 1 : 3;
-                                        }
-                                        arrayList3.add(new int[]{i37, i38, i3});
-                                        i35 = ((Integer) hashMap2.get(Integer.valueOf(i36))).intValue();
-                                    }
-                                    arrayList2 = arrayList3;
-                                    if (((Integer) hashMap3.get(Integer.valueOf(iArr3[0]))).intValue() <= 6 && iArr2[2] >= 9) {
-                                        i12 = arrayList.size();
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            continue;
-                        }
-                    }
-                    i13++;
-                }
-            }
-        }
-        if (seq == null) {
-            if (z2) {
-                tr = tr("Sem espaço/rota até a água", "No space/route to water", "Sin espacio/ruta hasta el agua", "Нет места/пути к воде");
-            } else {
-                tr = tr("Sem água por perto", "No water nearby", "Sin agua cerca", "Нет воды рядом");
-            }
-            lastError = tr;
-            return null;
-        }
-        Seq<BuildPlan> seq2 = new Seq<>();
-        HashSet hashSet2 = new HashSet();
-        BuildPlan buildPlan8 = null;
-        Iterator it5 = seq.iterator();
-        while (it5.hasNext()) {
-            BuildPlan buildPlan9 = (BuildPlan) it5.next();
-            seq2.add(buildPlan9);
-            footprint(buildPlan9.block, buildPlan9.x, buildPlan9.y, hashSet2);
-            if ((buildPlan9.block instanceof PowerNode) && buildPlan8 == null) {
-                buildPlan8 = buildPlan9;
-            }
-        }
-        Iterator it6 = arrayList2.iterator();
-        while (it6.hasNext()) {
-            int[] iArr5 = (int[]) it6.next();
-            seq2.add(new BuildPlan(iArr5[0], iArr5[1], iArr5[2], block3));
-            hashSet2.add(Integer.valueOf((iArr5[1] * width) + iArr5[0]));
-        }
-        BuildPlan buildPlan10 = new BuildPlan(iArr[0], iArr[1], 0, block2);
-        seq2.add(buildPlan10);
-        footprint(block2, iArr[0], iArr[1], hashSet2);
-        if (AutoSetConfig.autoPower()) {
-            addPower(seq2, hashSet2, reservedFromPlans, buildPlan10, buildPlan8, width);
-        }
-        lastTiles.addAll(hashSet2);
-        return seq2;
-    }
-
-    private static int[] snap(Block block, double d, double d2, boolean[] zArr, HashSet<Integer> hashSet, int i) {
-        int round = (int) Math.round(d);
-        int round2 = (int) Math.round(d2);
-        for (int i2 = 0; i2 <= 3; i2++) {
-            for (int i3 = -i2; i3 <= i2; i3++) {
-                for (int i4 = -i2; i4 <= i2; i4++) {
-                    if (Math.max(Math.abs(i4), Math.abs(i3)) == i2) {
-                        int i5 = round + i4;
-                        int i6 = round2 + i3;
-                        if (freeArea(block, i5, i6, zArr, hashSet) && canPlace(block, i5, i6, 0)) {
-                            return new int[]{i5, i6};
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private static void addPower(Seq<BuildPlan> seq, HashSet<Integer> hashSet, boolean[] zArr, BuildPlan buildPlan, BuildPlan buildPlan2, int i) {
-        int[] snap;
-        PowerNode block = Vars.content.block("power-node");
-        PowerNode block2 = Vars.content.block("large-power-node");
-        Block block3 = Vars.content.block("solar-panel");
-        if (block == null || buildPlan2 == null) {
-            return;
-        }
-        double d = buildPlan.x + 0.5d;
-        double d2 = buildPlan.y + 0.5d;
-        double d3 = buildPlan2.x;
-        double d4 = buildPlan2.y;
-        double hypot = Math.hypot(d3 - d, d4 - d2);
-        double d5 = hypot < 0.01d ? 1.0d : (d3 - d) / hypot;
-        double d6 = hypot < 0.01d ? 0.0d : (d4 - d2) / hypot;
-        PowerNode powerNode = block;
-        int i2 = 0;
-        int i3 = 0;
-        while (i3 < 2) {
-            PowerNode powerNode2 = (i3 == 0 && AutoSetConfig.bigNode() && block2 != null) ? block2 : block;
-            double d7 = powerNode2.laserRange;
-            double max = Math.max(2.0d, d7 - 2.0d);
-            int i4 = 1;
-            double min = Math.min(2.5d, hypot);
-            while (hypot - min > d7 - 1.5d && i4 < 40) {
-                min += max;
-                i4++;
-            }
-            if (powerNode2 != block && !affordable(powerNode2, i4)) {
-                i3++;
-            } else {
-                powerNode = powerNode2;
-                i2 = i4;
+  static final String B64 = "bXNjaAF4nEWOzUrDQBSFT/NvgnbjQlyFulFowEUrbgW7EKwbFRchi0kzLQNpUidTtYjv4CPUZ3DhW9UnKHonTemFuZfLPec7Awd7FvxRWSheqCGbwXj/gJOzlOcVjuPV8rP7+/XT7cQnl/0eG4+T1fI7TjoJrIJNOY7uFWfT8FqKPA/PL8LBm3oKT3v9MwQZr0ZSzJQoCwTpwn+8fbgZXt0NPLQrbYomvOCSqVJiPxfPc5FFspwrLnGQSpFNeES/yuZCIchZxWWU6RA4jai9E73wBUH8WflKqqLMONytFTikBxNo0bABg4bj/jWlb3D1vVULqJHGIpUJ06ZhudiUBb26O6devfragMyN36wjtJ+CqNmeBhs1sg5eN0RTBxs6bAfVq72FrolmEYN0Ng3jH04dbjI=";
+  
+  static final int[] DX = new int[] { 1, 0, -1, 0 };
+  
+  static final int[] DY = new int[] { 0, 1, 0, -1 };
+  
+  public static final ArrayList<Integer> lastTiles = new ArrayList<>();
+  
+  public static String lastError = "";
+  
+  private static Schematic schem;
+  
+  private static String tr(String paramString1, String paramString2, String paramString3, String paramString4) {
+    return AutoSetConfig.tr4(paramString1, paramString2, paramString3, paramString4);
+  }
+  
+  private static Schematic schematic() {
+    if (schem == null)
+      try {
+        schem = Schematics.readBase64("bXNjaAF4nEWOzUrDQBSFT/NvgnbjQlyFulFowEUrbgW7EKwbFRchi0kzLQNpUidTtYjv4CPUZ3DhW9UnKHonTemFuZfLPec7Awd7FvxRWSheqCGbwXj/gJOzlOcVjuPV8rP7+/XT7cQnl/0eG4+T1fI7TjoJrIJNOY7uFWfT8FqKPA/PL8LBm3oKT3v9MwQZr0ZSzJQoCwTpwn+8fbgZXt0NPLQrbYomvOCSqVJiPxfPc5FFspwrLnGQSpFNeES/yuZCIchZxWWU6RA4jai9E73wBUH8WflKqqLMONytFTikBxNo0bABg4bj/jWlb3D1vVULqJHGIpUJ06ZhudiUBb26O6devfragMyN36wjtJ+CqNmeBhs1sg5eN0RTBxs6bAfVq72FrolmEYN0Ng3jH04dbjI=");
+      } catch (Throwable throwable) {
+        Log.err("[Lunarians] steam schematic", throwable);
+      }  
+    return schem;
+  }
+  
+  private static void rotateOnce(Seq<BuildPlan> paramSeq, int paramInt1, int paramInt2) {
+    for (byte b = 0; b < paramSeq.size; b++) {
+      BuildPlan buildPlan = (BuildPlan)paramSeq.get(b);
+      if (!buildPlan.breaking && buildPlan.block != null) {
+        float f1 = buildPlan.block.offset;
+        float f2 = (buildPlan.x - paramInt1) * 8.0F + f1;
+        float f3 = (buildPlan.y - paramInt2) * 8.0F + f1;
+        buildPlan.x = Math.round((-f3 - f1) / 8.0F) + paramInt1;
+        buildPlan.y = Math.round((f2 - f1) / 8.0F) + paramInt2;
+        buildPlan.rotation = buildPlan.block.planRotation(Mathf.mod(buildPlan.rotation + 1, 4));
+        buildPlan.pointConfig(paramPoint2 -> {
+              int i = paramPoint2.x;
+              paramPoint2.set(-paramPoint2.y, i);
+            });
+      } 
+    } 
+  }
+  
+  private static boolean inside(int paramInt1, int paramInt2) {
+    return Vars.world.tiles.in(paramInt1, paramInt2);
+  }
+  
+  private static void footprint(Block paramBlock, int paramInt1, int paramInt2, HashSet<Integer> paramHashSet) {
+    int i = Vars.world.width();
+    int j = (paramBlock.size - 1) / 2;
+    for (byte b = 0; b < paramBlock.size; b++) {
+      for (byte b1 = 0; b1 < paramBlock.size; b1++) {
+        int k = paramInt1 - j + b1, m = paramInt2 - j + b;
+        paramHashSet.add(Integer.valueOf(m * i + k));
+      } 
+    } 
+  }
+  
+  private static boolean freeArea(Block paramBlock, int paramInt1, int paramInt2, boolean[] paramArrayOfboolean, HashSet<Integer> paramHashSet) {
+    int i = Vars.world.width();
+    int j = (paramBlock.size - 1) / 2;
+    for (byte b = 0; b < paramBlock.size; b++) {
+      for (byte b1 = 0; b1 < paramBlock.size; b1++) {
+        int k = paramInt1 - j + b1, m = paramInt2 - j + b;
+        if (!inside(k, m))
+          return false; 
+        int n = m * i + k;
+        if (paramArrayOfboolean[n] || (paramHashSet != null && paramHashSet.contains(Integer.valueOf(n))))
+          return false; 
+      } 
+    } 
+    return true;
+  }
+  
+  private static boolean canPlace(Block paramBlock, int paramInt1, int paramInt2, int paramInt3) {
+    try {
+      return Build.validPlace(paramBlock, Vars.player.team(), paramInt1, paramInt2, paramInt3);
+    } catch (Throwable throwable) {
+      return false;
+    } 
+  }
+  
+  private static int waterTiles(int paramInt1, int paramInt2) {
+    byte b1 = 0;
+    for (byte b2 = 0; b2 < 2; b2++) {
+      for (byte b = 0; b < 2; b++) {
+        Tile tile = Vars.world.tile(paramInt1 + b, paramInt2 + b2);
+        if (tile == null || tile.build != null)
+          return -1; 
+        if (tile.floor() != null && (tile.floor()).liquidDrop == Liquids.water)
+          b1++; 
+      } 
+    } 
+    return b1;
+  }
+  
+  private static boolean affordable(Block paramBlock, int paramInt) {
+    if (Vars.state.rules.infiniteResources)
+      return true; 
+    CoreBlock.CoreBuild coreBuild = Vars.player.closestCore();
+    if (coreBuild == null)
+      return false; 
+    for (ItemStack itemStack : paramBlock.requirements) {
+      if (coreBuild.items.get(itemStack.item) < itemStack.amount * paramInt)
+        return false; 
+    } 
+    return true;
+  }
+  
+  public static Seq<BuildPlan> plan(Unit paramUnit, int paramInt1, int paramInt2, float paramFloat, boolean[] paramArrayOfboolean) {
+    lastTiles.clear();
+    lastError = "";
+    try {
+      return planInner(paramUnit, paramInt1, paramInt2, paramFloat, paramArrayOfboolean);
+    } catch (Throwable throwable) {
+      Log.err("[Lunarians] SteamDrill", throwable);
+      lastError = "error";
+      return null;
+    } 
+  }
+  
+  private static Seq<BuildPlan> planInner(Unit paramUnit, int paramInt1, int paramInt2, float paramFloat, boolean[] paramArrayOfboolean) {
+    Schematic schematic = schematic();
+    Block block1 = Vars.content.block("laser-drill");
+    Block block2 = Vars.content.block("rotary-pump");
+    Block block3 = Vars.content.block("conduit");
+    if (schematic == null || block1 == null || block2 == null || block3 == null || Vars.player.closestCore() == null) {
+      lastError = tr("Blocos indisponíveis", "Blocks unavailable", "Bloques no disponibles", "Блоки недоступны");
+      return null;
+    } 
+    int i = Vars.world.width();
+    boolean[] arrayOfBoolean = AutoConnectConveyor.reservedFromPlans(paramUnit);
+    if (paramArrayOfboolean != null)
+      for (byte b1 = 0; b1 < paramArrayOfboolean.length && b1 < arrayOfBoolean.length; ) {
+        if (paramArrayOfboolean[b1])
+          arrayOfBoolean[b1] = true; 
+        b1++;
+      }  
+    int j = Vars.player.closestCore().tileX();
+    int k = Vars.player.closestCore().tileY();
+    int m = AutoSetConfig.steamMinCoal();
+    ArrayList<int[]> arrayList1 = new ArrayList();
+    int n = (int)Math.ceil(paramFloat);
+    for (int i1 = paramInt2 - n; i1 <= paramInt2 + n; i1++) {
+      for (int i4 = paramInt1 - n; i4 <= paramInt1 + n; i4++) {
+        if (inside(i4, i1) && Mathf.dst(i4, i1, paramInt1, paramInt2) <= paramFloat - 2.0F) {
+          byte b1 = 0;
+          boolean bool1 = false;
+          for (byte b2 = -1; b2 <= 1 && !bool1; b2++) {
+            for (byte b3 = -1; b3 <= 1; b3++) {
+              Tile tile = Vars.world.tile(i4 + b3, i1 + b2);
+              if (tile == null || tile.build != null || arrayOfBoolean[(i1 + b2) * i + i4 + b3]) {
+                bool1 = true;
                 break;
-            }
-        }
-        double max2 = Math.max(2.0d, powerNode.laserRange - 2.0d);
-        ArrayList arrayList = new ArrayList();
-        if (block3 != null) {
-            int i5 = 0;
-            while (i5 < 2) {
-                int[] snap2 = snap(block3, d + (d5 * 2.0d) + ((i5 == 0 ? -d6 : d6) * 1.5d), d2 + (d6 * 2.0d) + ((i5 == 0 ? d5 : -d5) * 1.5d), zArr, hashSet, i);
-                if (snap2 != null) {
-                    BuildPlan buildPlan3 = new BuildPlan(snap2[0], snap2[1], 0, block3);
-                    arrayList.add(buildPlan3);
-                    seq.add(buildPlan3);
-                    hashSet.add(Integer.valueOf((snap2[1] * i) + snap2[0]));
-                }
-                i5++;
-            }
-        }
-        ArrayList arrayList2 = new ArrayList();
-        double min2 = Math.min(2.5d, hypot);
-        for (int i6 = 0; i6 < i2 && (snap = snap(powerNode, d + (d5 * min2), d2 + (d6 * min2), zArr, hashSet, i)) != null; i6++) {
-            arrayList2.add(snap);
-            hashSet.add(Integer.valueOf((snap[1] * i) + snap[0]));
-            min2 += max2;
-        }
-        for (int size = arrayList2.size() - 1; size >= 0; size--) {
-            int[] iArr = (int[]) arrayList2.get(size);
-            ArrayList arrayList3 = new ArrayList();
-            if (size == arrayList2.size() - 1) {
-                arrayList3.add(new Point2(buildPlan2.x - iArr[0], buildPlan2.y - iArr[1]));
-            } else {
-                int[] iArr2 = (int[]) arrayList2.get(size + 1);
-                arrayList3.add(new Point2(iArr2[0] - iArr[0], iArr2[1] - iArr[1]));
-            }
-            if (size == 0) {
-                arrayList3.add(new Point2(buildPlan.x - iArr[0], buildPlan.y - iArr[1]));
-                Iterator it = arrayList.iterator();
-                while (it.hasNext()) {
-                    BuildPlan buildPlan4 = (BuildPlan) it.next();
-                    arrayList3.add(new Point2(buildPlan4.x - iArr[0], buildPlan4.y - iArr[1]));
-                }
-            }
-            seq.add(new BuildPlan(iArr[0], iArr[1], 0, powerNode, arrayList3.toArray(new Point2[0])));
-        }
-    }
+              } 
+              if (tile.drop() == Items.coal)
+                b1++; 
+            } 
+          } 
+          if (!bool1 && b1 >= m)
+            arrayList1.add(new int[] { i4, i1, b1, (int)(Mathf.dst(i4, i1, j, k) * 4.0F) }); 
+        } 
+      } 
+    } 
+    if (arrayList1.isEmpty()) {
+      lastError = tr("Sem carvão 3x3 livre", "No free 3x3 coal", "Sin carbón 3x3 libre", "Нет свободного угля 3x3");
+      return null;
+    } 
+    Collections.sort(arrayList1, (Comparator)new Comparator<int[]>() {
+          public int compare(int[] param1ArrayOfint1, int[] param1ArrayOfint2) {
+            return (9 - param1ArrayOfint1[2]) * 60 + param1ArrayOfint1[3] - (9 - param1ArrayOfint2[2]) * 60 + param1ArrayOfint2[3];
+          }
+        });
+    HashMap<Object, Object> hashMap = new HashMap<>();
+    boolean bool = false;
+    Seq<BuildPlan> seq1 = null;
+    ArrayList<int[]> arrayList2 = null;
+    int[] arrayOfInt = null;
+    int i2 = Integer.MAX_VALUE;
+    byte b = 0;
+    for (int i3 = 0; i3 < arrayList1.size() && b < 28; i3++) {
+      int[] arrayOfInt1 = arrayList1.get(i3);
+      for (byte b1 = 0; b1 < 4; b1++) {
+        Seq<BuildPlan> seq = Vars.schematics.toPlans(schematic, 0, 0);
+        BuildPlan buildPlan = null;
+        for (BuildPlan buildPlan3 : seq) {
+          if (buildPlan3.block == block1) {
+            buildPlan = buildPlan3;
+            break;
+          } 
+        } 
+        if (buildPlan == null) {
+          lastError = "schematic";
+          return null;
+        } 
+        int i4 = arrayOfInt1[0] - buildPlan.x, i5 = arrayOfInt1[1] - buildPlan.y;
+        for (BuildPlan buildPlan3 : seq) {
+          buildPlan3.x += i4;
+          buildPlan3.y += i5;
+        } 
+        byte b2;
+        for (b2 = 0; b2 < b1; ) {
+          rotateOnce(seq, arrayOfInt1[0], arrayOfInt1[1]);
+          b2++;
+        } 
+        b2 = 1;
+        HashSet<Integer> hashSet1 = new HashSet();
+        for (BuildPlan buildPlan3 : seq) {
+          if (buildPlan3.block == null || !freeArea(buildPlan3.block, buildPlan3.x, buildPlan3.y, arrayOfBoolean, null) || !canPlace(buildPlan3.block, buildPlan3.x, buildPlan3.y, buildPlan3.rotation)) {
+            b2 = 0;
+            break;
+          } 
+          footprint(buildPlan3.block, buildPlan3.x, buildPlan3.y, hashSet1);
+        } 
+        if (b2 != 0) {
+          BuildPlan buildPlan3 = null, buildPlan4 = null;
+          for (BuildPlan buildPlan5 : seq) {
+            if (buildPlan5.block == block3)
+              buildPlan3 = buildPlan5; 
+            if (buildPlan5.block instanceof PowerNode && buildPlan4 == null)
+              buildPlan4 = buildPlan5; 
+          } 
+          if (buildPlan3 != null) {
+            b++;
+            int i6 = buildPlan3.x - DX[buildPlan3.rotation & 0x3];
+            int i7 = buildPlan3.y - DY[buildPlan3.rotation & 0x3];
+            if (inside(i6, i7) && !arrayOfBoolean[i7 * i + i6] && !hashSet1.contains(Integer.valueOf(i7 * i + i6)) && canPlace(block3, i6, i7, 0)) {
+              HashMap<Object, Object> hashMap1 = new HashMap<>();
+              HashMap<Object, Object> hashMap2 = new HashMap<>();
+              ArrayDeque<Integer> arrayDeque = new ArrayDeque();
+              int i8 = i7 * i + i6;
+              hashMap1.put(Integer.valueOf(i8), Integer.valueOf(-1));
+              hashMap2.put(Integer.valueOf(i8), Integer.valueOf(0));
+              arrayDeque.add(Integer.valueOf(i8));
+              int[] arrayOfInt2 = null;
+              int[] arrayOfInt3 = null;
+              byte b3 = 48;
+              while (!arrayDeque.isEmpty()) {
+                int i9 = ((Integer)arrayDeque.poll()).intValue();
+                int i10 = i9 % i, i11 = i9 / i;
+                int i12 = ((Integer)hashMap2.get(Integer.valueOf(i9))).intValue();
+                byte b4;
+                for (b4 = 0; b4 < 4; b4++) {
+                  int i13 = i10 + DX[b4], i14 = i11 + DY[b4];
+                  for (int i15 = i13 - 1; i15 <= i13; i15++) {
+                    for (int i16 = i14 - 1; i16 <= i14; i16++) {
+                      if (i10 < i15 || i10 > i15 + 1 || i11 < i16 || i11 > i16 + 1) {
+                        int i17 = waterTiles(i15, i16);
+                        if (i17 >= 2) {
+                          bool = true;
+                          if ((i17 >= 4 || arrayOfInt2 == null) && 
+                            freeArea(block2, i15, i16, arrayOfBoolean, hashSet1) && canPlace(block2, i15, i16, 0)) {
+                            boolean bool1 = false;
+                            int i18;
+                            for (i18 = i9; i18 != -1; i18 = ((Integer)hashMap1.get(Integer.valueOf(i18))).intValue()) {
+                              int i19 = i18 % i, i20 = i18 / i;
+                              if (i19 >= i15 && i19 <= i15 + 1 && i20 >= i16 && i20 <= i16 + 1) {
+                                bool1 = true;
+                                break;
+                              } 
+                            } 
+                            if (!bool1) {
+                              if (i17 == 4) {
+                                arrayOfInt2 = new int[] { i9, i15, i16, 4 };
+                              } else if (arrayOfInt3 == null) {
+                                arrayOfInt3 = new int[] { i9, i15, i16, i17 };
+                              } 
+                              if (arrayOfInt2 != null)
+                                break; 
+                            } 
+                          } 
+                        } 
+                      } 
+                    } 
+                    if (arrayOfInt2 != null)
+                      break; 
+                  } 
+                  if (arrayOfInt2 != null)
+                    break; 
+                } 
+                if (arrayOfInt2 != null)
+                  break; 
+                if (i12 >= b3)
+                  continue; 
+                for (b4 = 0; b4 < 4; b4++) {
+                  int i13 = i10 + DX[b4], i14 = i11 + DY[b4];
+                  if (inside(i13, i14)) {
+                    int i15 = i14 * i + i13;
+                    if (!hashMap1.containsKey(Integer.valueOf(i15)) && !arrayOfBoolean[i15] && !hashSet1.contains(Integer.valueOf(i15))) {
+                      Boolean bool1 = (Boolean)hashMap.get(Integer.valueOf(i15));
+                      if (bool1 == null) {
+                        bool1 = Boolean.valueOf(canPlace(block3, i13, i14, 0));
+                        hashMap.put(Integer.valueOf(i15), bool1);
+                      } 
+                      if (bool1.booleanValue()) {
+                        hashMap1.put(Integer.valueOf(i15), Integer.valueOf(i9));
+                        hashMap2.put(Integer.valueOf(i15), Integer.valueOf(i12 + 1));
+                        arrayDeque.add(Integer.valueOf(i15));
+                      } 
+                    } 
+                  } 
+                } 
+              } 
+              if (arrayOfInt2 == null)
+                arrayOfInt2 = arrayOfInt3; 
+              if (arrayOfInt2 != null) {
+                int i9 = ((Integer)hashMap2.get(Integer.valueOf(arrayOfInt2[0]))).intValue() * 10 + (9 - arrayOfInt1[2]) * 25 + arrayOfInt1[3] / 4 + (4 - arrayOfInt2[3]) * 30;
+                if (i9 < i2) {
+                  i2 = i9;
+                  seq1 = seq;
+                  arrayOfInt = new int[] { arrayOfInt2[1], arrayOfInt2[2] };
+                  ArrayList<int[]> arrayList = new ArrayList();
+                  int i10;
+                  for (i10 = arrayOfInt2[0]; i10 != -1; i10 = ((Integer)hashMap1.get(Integer.valueOf(i10))).intValue()) {
+                    boolean bool1;
+                    int i11 = ((Integer)hashMap1.get(Integer.valueOf(i10))).intValue();
+                    int i12 = i10 % i, i13 = i10 / i;
+                    if (i11 == -1) {
+                      bool1 = buildPlan3.rotation & 0x3;
+                    } else {
+                      int i14 = i11 % i, i15 = i11 / i;
+                      bool1 = (i14 > i12) ? false : ((i14 < i12) ? true : ((i15 > i13) ? true : true));
+                    } 
+                    arrayList.add(new int[] { i12, i13, bool1 });
+                  } 
+                  arrayList2 = arrayList;
+                  if (((Integer)hashMap2.get(Integer.valueOf(arrayOfInt2[0]))).intValue() <= 6 && arrayOfInt1[2] >= 9) {
+                    i3 = arrayList1.size();
+                    break;
+                  } 
+                } 
+              } 
+            } 
+          } 
+        } 
+      } 
+    } 
+    if (seq1 == null) {
+      lastError = bool ? tr("Sem espaço/rota até a água", "No space/route to water", "Sin espacio/ruta hasta el agua", "Нет места/пути к воде") : tr("Sem água por perto", "No water nearby", "Sin agua cerca", "Нет воды рядом");
+      return null;
+    } 
+    Seq<BuildPlan> seq2 = new Seq();
+    HashSet<Integer> hashSet = new HashSet();
+    BuildPlan buildPlan1 = null;
+    for (BuildPlan buildPlan : seq1) {
+      seq2.add(buildPlan);
+      footprint(buildPlan.block, buildPlan.x, buildPlan.y, hashSet);
+      if (buildPlan.block instanceof PowerNode && buildPlan1 == null)
+        buildPlan1 = buildPlan; 
+    } 
+    for (int[] arrayOfInt1 : arrayList2) {
+      seq2.add(new BuildPlan(arrayOfInt1[0], arrayOfInt1[1], arrayOfInt1[2], block3));
+      hashSet.add(Integer.valueOf(arrayOfInt1[1] * i + arrayOfInt1[0]));
+    } 
+    BuildPlan buildPlan2 = new BuildPlan(arrayOfInt[0], arrayOfInt[1], 0, block2);
+    seq2.add(buildPlan2);
+    footprint(block2, arrayOfInt[0], arrayOfInt[1], hashSet);
+    if (AutoSetConfig.autoPower())
+      addPower(seq2, hashSet, arrayOfBoolean, buildPlan2, buildPlan1, i); 
+    lastTiles.addAll(hashSet);
+    return seq2;
+  }
+  
+  private static int[] snap(Block paramBlock, double paramDouble1, double paramDouble2, boolean[] paramArrayOfboolean, HashSet<Integer> paramHashSet, int paramInt) {
+    int i = (int)Math.round(paramDouble1), j = (int)Math.round(paramDouble2);
+    for (byte b = 0; b <= 3; b++) {
+      for (byte b1 = -b; b1 <= b; b1++) {
+        for (byte b2 = -b; b2 <= b; b2++) {
+          if (Math.max(Math.abs(b2), Math.abs(b1)) == b) {
+            int k = i + b2, m = j + b1;
+            if (freeArea(paramBlock, k, m, paramArrayOfboolean, paramHashSet) && canPlace(paramBlock, k, m, 0))
+              return new int[] { k, m }; 
+          } 
+        } 
+      } 
+    } 
+    return null;
+  }
+  
+  private static void addPower(Seq<BuildPlan> paramSeq, HashSet<Integer> paramHashSet, boolean[] paramArrayOfboolean, BuildPlan paramBuildPlan1, BuildPlan paramBuildPlan2, int paramInt) {
+    Block block1 = Vars.content.block("power-node");
+    Block block2 = Vars.content.block("large-power-node");
+    Block block3 = Vars.content.block("solar-panel");
+    if (block1 == null || paramBuildPlan2 == null)
+      return; 
+    double d1 = paramBuildPlan1.x + 0.5D, d2 = paramBuildPlan1.y + 0.5D;
+    double d3 = paramBuildPlan2.x, d4 = paramBuildPlan2.y;
+    double d5 = Math.hypot(d3 - d1, d4 - d2);
+    double d6 = (d5 < 0.01D) ? 1.0D : ((d3 - d1) / d5), d7 = (d5 < 0.01D) ? 0.0D : ((d4 - d2) / d5);
+    Block block4 = block1;
+    byte b1 = 0;
+    for (byte b2 = 0; b2 < 2; b2++) {
+      Block block = (b2 == 0 && AutoSetConfig.bigNode() && block2 != null) ? block2 : block1;
+      double d11 = ((PowerNode)block).laserRange;
+      double d12 = Math.max(2.0D, d11 - 2.0D);
+      byte b = 1;
+      double d13 = Math.min(2.5D, d5);
+      while (d5 - d13 > d11 - 1.5D && b < 40) {
+        d13 += d12;
+        b++;
+      } 
+      if (block == block1 || affordable(block, b)) {
+        block4 = block;
+        b1 = b;
+        break;
+      } 
+    } 
+    double d8 = ((PowerNode)block4).laserRange;
+    double d9 = Math.max(2.0D, d8 - 2.0D);
+    ArrayList<BuildPlan> arrayList = new ArrayList();
+    if (block3 != null)
+      for (byte b = 0; b < 2; b++) {
+        int[] arrayOfInt = snap(block3, d1 + d6 * 2.0D + ((b == 0) ? -d7 : d7) * 1.5D, d2 + d7 * 2.0D + ((b == 0) ? d6 : -d6) * 1.5D, paramArrayOfboolean, paramHashSet, paramInt);
+        if (arrayOfInt != null) {
+          BuildPlan buildPlan = new BuildPlan(arrayOfInt[0], arrayOfInt[1], 0, block3);
+          arrayList.add(buildPlan);
+          paramSeq.add(buildPlan);
+          paramHashSet.add(Integer.valueOf(arrayOfInt[1] * paramInt + arrayOfInt[0]));
+        } 
+      }  
+    ArrayList<int[]> arrayList1 = new ArrayList();
+    double d10 = Math.min(2.5D, d5);
+    int i;
+    for (i = 0; i < b1; i++) {
+      int[] arrayOfInt = snap(block4, d1 + d6 * d10, d2 + d7 * d10, paramArrayOfboolean, paramHashSet, paramInt);
+      if (arrayOfInt == null)
+        break; 
+      arrayList1.add(arrayOfInt);
+      paramHashSet.add(Integer.valueOf(arrayOfInt[1] * paramInt + arrayOfInt[0]));
+      d10 += d9;
+    } 
+    for (i = arrayList1.size() - 1; i >= 0; i--) {
+      int[] arrayOfInt = arrayList1.get(i);
+      ArrayList<Point2> arrayList2 = new ArrayList();
+      if (i == arrayList1.size() - 1) {
+        arrayList2.add(new Point2(paramBuildPlan2.x - arrayOfInt[0], paramBuildPlan2.y - arrayOfInt[1]));
+      } else {
+        int[] arrayOfInt1 = arrayList1.get(i + 1);
+        arrayList2.add(new Point2(arrayOfInt1[0] - arrayOfInt[0], arrayOfInt1[1] - arrayOfInt[1]));
+      } 
+      if (i == 0) {
+        arrayList2.add(new Point2(paramBuildPlan1.x - arrayOfInt[0], paramBuildPlan1.y - arrayOfInt[1]));
+        for (BuildPlan buildPlan : arrayList)
+          arrayList2.add(new Point2(buildPlan.x - arrayOfInt[0], buildPlan.y - arrayOfInt[1])); 
+      } 
+      paramSeq.add(new BuildPlan(arrayOfInt[0], arrayOfInt[1], 0, block4, arrayList2.toArray(new Point2[0])));
+    } 
+  }
 }
