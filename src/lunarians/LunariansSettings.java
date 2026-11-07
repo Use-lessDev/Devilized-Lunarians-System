@@ -344,17 +344,11 @@ public class LunariansSettings {
         defenceSlots.clear();
         String string5 = Core.settings.getString("lunarians-defence-slots", "");
         if (!string5.isEmpty()) {
-            void var5_13;
-            boolean bl3 = false;
             String[] stringArray = string5.split(";");
-            int n2 = stringArray.length;
-            n = 0;
-            boolean bl4 = false;
-            while (var5_13 < n2) {
-                string = stringArray[var5_13];
+            for (int i = 0; i < stringArray.length; i++) {
+                String s = stringArray[i];
                 if (LunariansSettings.defenceSlots.size >= 8) break;
-                defenceSlots.add((Object)DefenceSlot.deserialize(string));
-                ++var5_13;
+                defenceSlots.add((Object)DefenceSlot.deserialize(s));
             }
         }
         enableAutoShield = Core.settings.getBool("lunarians-auto-shield", false);

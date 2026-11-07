@@ -61,6 +61,7 @@ import lunarians.LunariansSettings;
 import lunarians.MinerUnits;
 import lunarians.ProductionAlert;
 import lunarians.UiStyle;
+import lunarians.UnitConversations;
 import lunarians.ui.AutoDrillUi;
 import lunarians.ui.AutoFillConfigDialog;
 import lunarians.ui.ConfigDialog;
@@ -105,7 +106,7 @@ extends Table {
         this.scroll.setFadeScrollBars(false);
         this.scroll.visible = false;
         Table table = new Table();
-        this.scrollCell = table.add((Element)this.scroll).top();
+        this.scrollCell = (Cell)table.add((Element)this.scroll).top();
         this.applySize();
         table.add((Element)this.toggleBtn).size(40.0f, 40.0f).top().pad(6.0f);
         this.add((Element)table).top().right().padTop(120.0f);
@@ -405,8 +406,8 @@ extends Table {
             }
         }).left();
         this.panel.add((Element)table4).growX().left().pad(4.0f).row();
-        textButton2 = new Table();
-        textButton2.check("pt".equals(LunariansSettings.language) ? "Auto Dock + Energia (Beta)" : "Auto Dock + Energy (Beta)", LunariansSettings.dockAuto, new Boolc(){
+        Table tbDock = new Table();
+        tbDock.check("pt".equals(LunariansSettings.language) ? "Auto Dock + Energia (Beta)" : "Auto Dock + Energy (Beta)", LunariansSettings.dockAuto, new Boolc(){
 
             public void get(boolean bl) {
                 LunariansSettings.dockAuto = bl;
@@ -417,7 +418,7 @@ extends Table {
                 }
             }
         }).left();
-        this.panel.add((Element)textButton2).growX().left().pad(4.0f).row();
+        this.panel.add((Element)tbDock).growX().left().pad(4.0f).row();
         Table table5 = new Table();
         table5.check("pt".equals(LunariansSettings.language) ? "Economia em ordem (Beta)" : "Ordered economy (Beta)", AutoEconomy.enabled(), new Boolc(){
 
@@ -451,6 +452,14 @@ extends Table {
             }
         }).width(52.0f).height(40.0f).padLeft(4.0f);
         this.panel.add((Element)table7).growX().left().pad(4.0f).row();
+        Table table7c = new Table();
+        table7c.check("pt".equals(LunariansSettings.language) ? "Conversas entre unidades (T1-T3 divertidas, T4-T5 sérias)" : "Unit conversations (T1-T3 playful, T4-T5 serious)", UnitConversations.enabled(), new Boolc(){
+
+            public void get(boolean bl) {
+                UnitConversations.setEnabled(bl);
+            }
+        }).left().wrap().growX();
+        this.panel.add((Element)table7c).growX().left().pad(4.0f).row();
         UiStyle.section(this.panel, BetaHud.t("Units", "Unidades"));
         Table table8 = new Table();
         table8.check(MinerUnits.title() + " (Beta)", MinerUnits.enabled(), new Boolc(){

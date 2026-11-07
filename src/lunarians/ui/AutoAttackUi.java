@@ -21,6 +21,7 @@
  */
 package lunarians.ui;
 
+import arc.Core;
 import arc.func.Cons;
 import arc.graphics.Color;
 import arc.math.Mathf;
@@ -87,7 +88,12 @@ public class AutoAttackUi {
             LunariansSettings.autoAttackHeal = bl;
             LunariansSettings.save();
         }).left();
-        table.add((Element)table3).left().padBottom(4.0f).row();
+        table.add((Element)table3).left().padBottom(2.0f).row();
+        Table table3b = new Table();
+        table3b.check(AutoAttackUi.tr("Smart path (fewer turrets, safer route to core)", "Rota inteligente (menos torres, rota segura ate o nucleo)"), Core.settings.getBool("lunarians-attack-smart-path", false), bl -> {
+            Core.settings.put("lunarians-attack-smart-path", (Object)bl);
+        }).left();
+        table.add((Element)table3b).left().padBottom(4.0f).row();
         table.add((Element)this.list).growX().row();
         this.rebuild();
     }
@@ -106,7 +112,7 @@ public class AutoAttackUi {
         Table table = new Table();
         if (seq.size < 10) {
             table.button((Drawable)Icon.add, Styles.defaulti, () -> {
-                seq.add((Object)new AttackSlot());
+                seq.add(new AttackSlot());
                 LunariansSettings.save();
                 AutoAttackUi.reopen();
             }).size(40.0f).pad(2.0f);
@@ -121,7 +127,7 @@ public class AutoAttackUi {
             if (seq.size >= 10) {
                 return;
             }
-            seq.add((Object)clipboard.copy());
+            seq.add(clipboard.copy());
             LunariansSettings.save();
             if (Vars.ui != null) {
                 Vars.ui.showInfoToast(AutoAttackUi.pasted(), 2.0f);
@@ -171,11 +177,11 @@ public class AutoAttackUi {
         }).size(32.0f, 28.0f);
         table2.add((Element)table4).left().padTop(2.0f).row();
         if (unitType != null) {
-            n2 = AutoAttack.maxStandoffTiles(unitType);
+            final int maxStandoff = AutoAttack.maxStandoffTiles(unitType);
             table = new Table();
             table.add((CharSequence)AutoAttackUi.tr("Attack distance", "Dist. ataque")).left().padRight(4.0f).fontScale(0.85f);
             table.button("-", () -> {
-                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? n2 : (attackSlot.standoffTiles <= 1 ? 0 : --attackSlot.standoffTiles);
+                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? maxStandoff : (attackSlot.standoffTiles <= 1 ? 0 : attackSlot.standoffTiles - 1);
                 LunariansSettings.save();
                 AutoAttackUi.reopen();
             }).size(32.0f, 28.0f);
@@ -183,23 +189,23 @@ public class AutoAttackUi {
                 if (attackSlot.standoffTiles <= 0) {
                     return AutoAttackUi.tr("normal", "normal");
                 }
-                return String.valueOf(Mathf.clamp((int)attackSlot.standoffTiles, (int)1, (int)n2));
+                return String.valueOf(Mathf.clamp((int)attackSlot.standoffTiles, (int)1, (int)maxStandoff));
             }).width(56.0f).center().pad(2.0f);
             table.button("+", () -> {
-                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? 1 : Math.min(n2, attackSlot.standoffTiles + 1);
+                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? 1 : Math.min(maxStandoff, attackSlot.standoffTiles + 1);
                 LunariansSettings.save();
                 AutoAttackUi.reopen();
             }).size(32.0f, 28.0f);
             float f = unitType.maxRange / 8.0f;
-            table.add((CharSequence)(" " + AutoAttackUi.tr("1-" + n2 + " (range " + (int)f + "+2)", "1-" + n2 + " (alcance " + (int)f + "+2)"))).color(Color.lightGray).fontScale(0.7f).padLeft(4.0f);
+            table.add((CharSequence)(" " + AutoAttackUi.tr("1-" + maxStandoff + " (range " + (int)f + "+2)", "1-" + maxStandoff + " (alcance " + (int)f + "+2)"))).color(Color.lightGray).fontScale(0.7f).padLeft(4.0f);
             table2.add((Element)table).left().padTop(2.0f).row();
         }
-        n2 = attackSlot.hasZone() ? 1 : 0;
+        final boolean hasZone = attackSlot.hasZone();
         table = new Table();
-        table.add((CharSequence)LunariansI18n.get("atk_zone", n2 != 0 ? attackSlot.x + "," + attackSlot.y + " r" + (int)attackSlot.zoneRadius : LunariansI18n.get("atk_whole_map"))).wrap().growX().left().fontScale(0.85f).color(n2 != 0 ? Color.white : Color.lightGray);
-        table.button(AutoAttackUi.mapBtn(), () -> AutoAttackUi.lambda$card$18(n2 != 0, attackSlot)).width(90.0f).height(32.0f).padLeft(4.0f);
+        table.add((CharSequence)LunariansI18n.get("atk_zone", hasZone ? attackSlot.x + "," + attackSlot.y + " r" + (int)attackSlot.zoneRadius : LunariansI18n.get("atk_whole_map"))).wrap().growX().left().fontScale(0.85f).color(hasZone ? Color.white : Color.lightGray);
+        table.button(AutoAttackUi.mapBtn(), () -> AutoAttackUi.lambda$card$18(hasZone, attackSlot)).width(90.0f).height(32.0f).padLeft(4.0f);
         table2.add((Element)table).growX().padTop(2.0f).row();
-        if (n2 != 0) {
+        if (hasZone) {
             Table table5 = new Table();
             table5.add((CharSequence)LunariansI18n.get("atk_zone_radius")).left().padRight(4.0f).fontScale(0.85f);
             table5.button("-", () -> {

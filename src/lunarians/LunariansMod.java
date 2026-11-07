@@ -49,6 +49,7 @@ import lunarians.ServerGuard;
 import lunarians.UiStyle;
 import lunarians.UsedArea;
 import lunarians.WeatherSafe;
+import lunarians.UnitConversations;
 import lunarians.hub.LunariansHub;
 import lunarians.ui.BetaHud;
 import lunarians.ui.SchematicPanel;
@@ -305,7 +306,14 @@ extends Mod {
                 LunariansHub.init();
             }
         });
-        Log.info((Object)"[Lunarians] v3.18 loaded (client-only, PC + mobile).");
+        LunariansMod.safeInit("UnitConversations", new Runnable(){
+
+            @Override
+            public void run() {
+                UnitConversations.init();
+            }
+        });
+        Log.info((Object)"[Lunarians] loaded (client-only, PC + mobile).");
     }
 
     private static void safeInit(String string, Runnable runnable) {
