@@ -1,0 +1,11 @@
+*.class
+*.jar
+*.dex
+.idea/
+.vscode/
+*.iml
+out/
+build/
+.gradle/
+*.log
+.DS_Store
