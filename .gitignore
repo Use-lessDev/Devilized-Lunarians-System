@@ -3,6 +3,7 @@
 *.dex
 # Keep compiled mod for direct Mindustry import
 !dist/*.jar
+!gradle/wrapper/gradle-wrapper.jar
 .idea/
 .vscode/
 *.iml
