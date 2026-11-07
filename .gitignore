@@ -1,6 +1,8 @@
 *.class
 *.jar
 *.dex
+# Keep compiled mod for direct Mindustry import
+!dist/*.jar
 .idea/
 .vscode/
 *.iml
