@@ -1,39 +1,57 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.Events
+ *  mindustry.Vars
+ *  mindustry.game.EventType$Trigger
+ *  mindustry.gen.Groups
+ */
 package lunarians;
 
 import arc.Events;
 import mindustry.Vars;
 import mindustry.game.EventType;
 import mindustry.gen.Groups;
-import mindustry.gen.WeatherState;
 
 public class WeatherSafe {
-  private static boolean registered;
-  
-  private static float timer;
-  
-  public static void init() {
-    if (registered || Vars.headless)
-      return; 
-    registered = true;
-    Events.run(EventType.Trigger.update, WeatherSafe::tick);
-  }
-  
-  private static void tick() {
-    timer++;
-    if (timer < 120.0F)
-      return; 
-    timer = 0.0F;
-    try {
-      if (Groups.weather == null)
-        return; 
-      Groups.weather.each(paramWeatherState -> {
-            try {
-              if (paramWeatherState == null)
-                return; 
-              if (paramWeatherState.weather == null)
-                paramWeatherState.remove(); 
-            } catch (Throwable throwable) {}
-          });
-    } catch (Throwable throwable) {}
-  }
+    private static boolean registered;
+    private static float timer;
+
+    public static void init() {
+        if (registered || Vars.headless) {
+            return;
+        }
+        registered = true;
+        Events.run((Object)EventType.Trigger.update, WeatherSafe::tick);
+    }
+
+    private static void tick() {
+        if ((timer += 1.0f) < 120.0f) {
+            return;
+        }
+        timer = 0.0f;
+        try {
+            if (Groups.weather == null) {
+                return;
+            }
+            Groups.weather.each(weatherState -> {
+                try {
+                    if (weatherState == null) {
+                        return;
+                    }
+                    if (weatherState.weather == null) {
+                        weatherState.remove();
+                    }
+                }
+                catch (Throwable throwable) {
+                    // empty catch block
+                }
+            });
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
 }
+

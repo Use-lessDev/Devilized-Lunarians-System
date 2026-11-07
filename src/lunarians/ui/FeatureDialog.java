@@ -1,3 +1,12 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.Core
+ *  arc.scene.Element
+ *  arc.scene.ui.layout.Table
+ *  mindustry.ui.dialogs.BaseDialog
+ */
 package lunarians.ui;
 
 import arc.Core;
@@ -7,47 +16,56 @@ import lunarians.LunariansI18n;
 import lunarians.LunariansSettings;
 import mindustry.ui.dialogs.BaseDialog;
 
-public abstract class FeatureDialog extends BaseDialog {
-  protected final Table body = new Table();
-  
-  private Runnable after;
-  
-  public static FeatureDialog top;
-  
-  public FeatureDialog after(Runnable paramRunnable) {
-    this.after = paramRunnable;
-    return this;
-  }
-  
-  protected FeatureDialog(String paramString) {
-    super(paramString);
-    this.body.defaults().growX().padBottom(4.0F);
-    this.cont.pane((Element)this.body).grow().maxHeight(Core.graphics.getHeight() * 0.78F).width(Math.min(Core.graphics.getWidth() * 0.96F, 900.0F));
-    this.buttons.defaults().size(150.0F, 48.0F).pad(4.0F);
-    this.buttons.button(LunariansI18n.get("back"), new Runnable() {
-          public void run() {
-            FeatureDialog.this.hide();
-          }
+public abstract class FeatureDialog
+extends BaseDialog {
+    protected final Table body = new Table();
+    private Runnable after;
+    public static FeatureDialog top;
+
+    public FeatureDialog after(Runnable runnable) {
+        this.after = runnable;
+        return this;
+    }
+
+    protected FeatureDialog(String string) {
+        super(string);
+        this.body.defaults().growX().padBottom(4.0f);
+        this.cont.pane((Element)this.body).grow().maxHeight((float)Core.graphics.getHeight() * 0.78f).width(Math.min((float)Core.graphics.getWidth() * 0.96f, 900.0f));
+        this.buttons.defaults().size(150.0f, 48.0f).pad(4.0f);
+        this.buttons.button(LunariansI18n.get("back"), new Runnable(){
+
+            @Override
+            public void run() {
+                FeatureDialog.this.hide();
+            }
         });
-    shown(new Runnable() {
-          public void run() {
-            FeatureDialog.top = FeatureDialog.this;
-          }
+        this.shown(new Runnable(){
+
+            @Override
+            public void run() {
+                top = FeatureDialog.this;
+            }
         });
-    closeOnBack();
-    hidden(new Runnable() {
-          public void run() {
-            if (FeatureDialog.top == FeatureDialog.this)
-              FeatureDialog.top = null; 
-            LunariansSettings.save();
-            FeatureDialog.this.onClosed();
-            Runnable runnable = FeatureDialog.this.after;
-            FeatureDialog.this.after = null;
-            if (runnable != null)
-              runnable.run(); 
-          }
+        this.closeOnBack();
+        this.hidden(new Runnable(){
+
+            @Override
+            public void run() {
+                if (top == FeatureDialog.this) {
+                    top = null;
+                }
+                LunariansSettings.save();
+                FeatureDialog.this.onClosed();
+                Runnable runnable = FeatureDialog.this.after;
+                FeatureDialog.this.after = null;
+                if (runnable != null) {
+                    runnable.run();
+                }
+            }
         });
-  }
-  
-  protected void onClosed() {}
+    }
+
+    protected void onClosed() {
+    }
 }
+

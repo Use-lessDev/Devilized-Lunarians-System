@@ -1,10 +1,33 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.func.Cons
+ *  arc.graphics.Color
+ *  arc.math.Mathf
+ *  arc.scene.Element
+ *  arc.scene.style.Drawable
+ *  arc.scene.style.TextureRegionDrawable
+ *  arc.scene.ui.Dialog
+ *  arc.scene.ui.ImageButton
+ *  arc.scene.ui.layout.Table
+ *  arc.struct.Seq
+ *  mindustry.Vars
+ *  mindustry.gen.Icon
+ *  mindustry.graphics.Pal
+ *  mindustry.type.UnitType
+ *  mindustry.ui.Styles
+ *  mindustry.ui.dialogs.BaseDialog
+ */
 package lunarians.ui;
 
+import arc.func.Cons;
 import arc.graphics.Color;
 import arc.math.Mathf;
 import arc.scene.Element;
 import arc.scene.style.Drawable;
 import arc.scene.style.TextureRegionDrawable;
+import arc.scene.ui.Dialog;
 import arc.scene.ui.ImageButton;
 import arc.scene.ui.layout.Table;
 import arc.struct.Seq;
@@ -12,6 +35,7 @@ import lunarians.AutoAttack;
 import lunarians.LunariansI18n;
 import lunarians.LunariansSettings;
 import lunarians.data.AttackSlot;
+import lunarians.ui.BuilderDialog;
 import mindustry.Vars;
 import mindustry.gen.Icon;
 import mindustry.graphics.Pal;
@@ -20,272 +44,279 @@ import mindustry.ui.Styles;
 import mindustry.ui.dialogs.BaseDialog;
 
 public class AutoAttackUi {
-  private final Table list = new Table();
-  
-  private static AttackSlot clipboard = null;
-  
-  private static BuilderDialog currentDlg;
-  
-  public static BuilderDialog make0() {
-    return new BuilderDialog(title(), paramTable -> new AutoAttackUi(paramTable), () -> {
-        
-        });
-  }
-  
-  public AutoAttackUi(Table paramTable) {
-    paramTable.defaults().growX();
-    paramTable.add(hint()).wrap().growX().color(Color.lightGray).padBottom(4.0F).row();
-    Table table1 = new Table();
-    table1.check(tr("Regroup", "Reagrupar"), AutoAttack.regroupEnabled(), paramBoolean -> AutoAttack.setRegroupEnabled(paramBoolean)).left();
-    table1.add(" " + tr("every", "a cada") + " ").fontScale(0.85F);
-    table1.button("-", () -> {
-          AutoAttack.setRegroupSec(AutoAttack.regroupSec() - 1);
-          reopen();
-        }).size(32.0F, 28.0F);
-    table1.label(() -> AutoAttack.regroupSec() + "s").width(40.0F).center();
-    table1.button("+", () -> {
-          AutoAttack.setRegroupSec(AutoAttack.regroupSec() + 1);
-          reopen();
-        }).size(32.0F, 28.0F);
-    table1.add(" " + tr("(min 5)", "(min 5)")).color(Color.lightGray).fontScale(0.75F);
-    paramTable.add((Element)table1).left().padBottom(6.0F).row();
-    Table table2 = new Table();
-    table2.check(LunariansI18n.get("atk_heal"), LunariansSettings.autoAttackHeal, paramBoolean -> {
-          LunariansSettings.autoAttackHeal = paramBoolean;
-          LunariansSettings.save();
-        }).left();
-    paramTable.add((Element)table2).left().padBottom(4.0F).row();
-    paramTable.add((Element)this.list).growX().row();
-    rebuild();
-  }
-  
-  private void rebuild() {
-    this.list.clearChildren();
-    Seq<AttackSlot> seq = LunariansSettings.attackSlots;
-    this.list.add(seq.size + "/10").color(Pal.accent).padBottom(4.0F).row();
-    if (seq.isEmpty()) {
-      this.list.add(emptyMsg()).wrap().growX().padBottom(4.0F).row();
-    } else {
-      for (byte b = 0; b < seq.size; b++)
-        this.list.add((Element)card((AttackSlot)seq.get(b), b)).growX().padBottom(3.0F).row(); 
-    } 
-    Table table = new Table();
-    if (seq.size < 10)
-      table.button((Drawable)Icon.add, Styles.defaulti, () -> {
-            paramSeq.add(new AttackSlot());
-            LunariansSettings.save();
-            reopen();
-          }).size(40.0F).pad(2.0F); 
-    table.button(pasteLabel(), () -> {
-          if (clipboard == null) {
-            if (Vars.ui != null)
-              Vars.ui.showInfoToast(noClip(), 2.0F); 
-            return;
-          } 
-          if (paramSeq.size >= 10)
-            return; 
-          paramSeq.add(clipboard.copy());
-          LunariansSettings.save();
-          if (Vars.ui != null)
-            Vars.ui.showInfoToast(pasted(), 2.0F); 
-          reopen();
-        }).width(90.0F).height(36.0F).pad(2.0F);
-    this.list.add((Element)table).left().padTop(2.0F).row();
-  }
-  
-  private Table card(AttackSlot paramAttackSlot, int paramInt) {
-    Table table1 = new Table();
-    table1.setBackground(Styles.black6);
-    table1.defaults().growX().pad(4.0F);
-    UnitType unitType = (paramAttackSlot.unit == null || paramAttackSlot.unit.isEmpty()) ? null : Vars.content.unit(paramAttackSlot.unit);
-    Table table2 = new Table();
-    ImageButton imageButton = new ImageButton((unitType != null) ? (Drawable)new TextureRegionDrawable(unitType.uiIcon) : (Drawable)Icon.add, Styles.clearNonei);
-    imageButton.resizeImage(32.0F);
-    imageButton.clicked(() -> openUnitPicker(paramAttackSlot));
-    table2.add((Element)imageButton).size(40.0F).padRight(6.0F);
-    table2.add((unitType != null) ? unitType.localizedName : pickUnit()).wrap().growX().left().fontScale(0.9F);
-    table2.button(copyLabel(), () -> {
-          clipboard = paramAttackSlot.copy();
-          if (Vars.ui != null)
-            Vars.ui.showInfoToast(copied(), 2.0F); 
-        }).width(64.0F).height(32.0F).padLeft(4.0F);
-    table2.button((Drawable)Icon.trash, Styles.defaulti, () -> {
-          LunariansSettings.attackSlots.remove(paramInt);
-          LunariansSettings.save();
-          reopen();
-        }).size(36.0F).padLeft(4.0F);
-    table1.add((Element)table2).growX().row();
-    Table table3 = new Table();
-    table3.add(maxLabel()).left().padRight(4.0F).fontScale(0.85F);
-    table3.button("-", () -> {
-          paramAttackSlot.maxUnits = Math.max(0, paramAttackSlot.maxUnits - 1);
-          LunariansSettings.save();
-          reopen();
-        }).size(32.0F, 28.0F);
-    table3.label(() -> (paramAttackSlot.maxUnits <= 0) ? all() : String.valueOf(paramAttackSlot.maxUnits)).width(40.0F).center().pad(2.0F);
-    table3.button("+", () -> {
-          paramAttackSlot.maxUnits = Math.min(99, paramAttackSlot.maxUnits + 1);
-          LunariansSettings.save();
-          reopen();
-        }).size(32.0F, 28.0F);
-    table1.add((Element)table3).left().padTop(2.0F).row();
-    if (unitType != null) {
-      int i = AutoAttack.maxStandoffTiles(unitType);
-      Table table = new Table();
-      table.add(tr("Attack distance", "Dist. ataque")).left().padRight(4.0F).fontScale(0.85F);
-      table.button("-", () -> {
-            if (paramAttackSlot.standoffTiles <= 0) {
-              paramAttackSlot.standoffTiles = paramInt;
-            } else if (paramAttackSlot.standoffTiles <= 1) {
-              paramAttackSlot.standoffTiles = 0;
-            } else {
-              paramAttackSlot.standoffTiles--;
-            } 
-            LunariansSettings.save();
-            reopen();
-          }).size(32.0F, 28.0F);
-      table.label(() -> (paramAttackSlot.standoffTiles <= 0) ? tr("normal", "normal") : String.valueOf(Mathf.clamp(paramAttackSlot.standoffTiles, 1, paramInt)))
+    private final Table list = new Table();
+    private static AttackSlot clipboard = null;
+    private static BuilderDialog currentDlg;
 
-        
-        .width(56.0F).center().pad(2.0F);
-      table.button("+", () -> {
-            if (paramAttackSlot.standoffTiles <= 0) {
-              paramAttackSlot.standoffTiles = 1;
-            } else {
-              paramAttackSlot.standoffTiles = Math.min(paramInt, paramAttackSlot.standoffTiles + 1);
-            } 
+    public static BuilderDialog make() {
+        currentDlg = AutoAttackUi.make0();
+        return currentDlg;
+    }
+
+    public static BuilderDialog make0() {
+        return new BuilderDialog(AutoAttackUi.title(), (Cons<Table>)((Cons)table -> new AutoAttackUi((Table)table)), () -> {});
+    }
+
+    private static void reopen() {
+        if (currentDlg != null) {
+            currentDlg.hide();
+        }
+        currentDlg = AutoAttackUi.make();
+        Dialog dialog = currentDlg.show();
+    }
+
+    public AutoAttackUi(Table table) {
+        table.defaults().growX();
+        table.add((CharSequence)AutoAttackUi.hint()).wrap().growX().color(Color.lightGray).padBottom(4.0f).row();
+        Table table2 = new Table();
+        table2.check(AutoAttackUi.tr("Regroup", "Reagrupar"), AutoAttack.regroupEnabled(), bl -> AutoAttack.setRegroupEnabled(bl)).left();
+        table2.add((CharSequence)(" " + AutoAttackUi.tr("every", "a cada") + " ")).fontScale(0.85f);
+        table2.button("-", () -> {
+            AutoAttack.setRegroupSec(AutoAttack.regroupSec() - 1);
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        table2.label(() -> AutoAttack.regroupSec() + "s").width(40.0f).center();
+        table2.button("+", () -> {
+            AutoAttack.setRegroupSec(AutoAttack.regroupSec() + 1);
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        table2.add((CharSequence)(" " + AutoAttackUi.tr("(min 5)", "(min 5)"))).color(Color.lightGray).fontScale(0.75f);
+        table.add((Element)table2).left().padBottom(6.0f).row();
+        Table table3 = new Table();
+        table3.check(LunariansI18n.get("atk_heal"), LunariansSettings.autoAttackHeal, bl -> {
+            LunariansSettings.autoAttackHeal = bl;
             LunariansSettings.save();
-            reopen();
-          }).size(32.0F, 28.0F);
-      float f = unitType.maxRange / 8.0F;
-      table.add(" " + tr("1-" + i + " (range " + (int)f + "+2)", "1-" + i + " (alcance " + (int)f + "+2)"))
-        
-        .color(Color.lightGray).fontScale(0.7F).padLeft(4.0F);
-      table1.add((Element)table).left().padTop(2.0F).row();
-    } 
-    boolean bool = paramAttackSlot.hasZone();
-    Table table4 = new Table();
-    table4.add(LunariansI18n.get("atk_zone", bool ? (paramAttackSlot.x + "," + paramAttackSlot.y + " r" + (int)paramAttackSlot.zoneRadius) : LunariansI18n.get("atk_whole_map")))
-      .wrap().growX().left().fontScale(0.85F).color(bool ? Color.white : Color.lightGray);
-    table4.button(mapBtn(), () -> {
-          if (paramBoolean) {
-            paramAttackSlot.x = Integer.MIN_VALUE;
-            paramAttackSlot.y = Integer.MIN_VALUE;
-            paramAttackSlot.zoneRadius = 0.0F;
-          } else if (Vars.player != null && Vars.player.unit() != null) {
-            paramAttackSlot.x = Vars.player.unit().tileX();
-            paramAttackSlot.y = Vars.player.unit().tileY();
-            paramAttackSlot.zoneRadius = Math.max(10.0F, paramAttackSlot.zoneRadius);
-          } 
-          LunariansSettings.save();
-          reopen();
-        }).width(90.0F).height(32.0F).padLeft(4.0F);
-    table1.add((Element)table4).growX().padTop(2.0F).row();
-    if (bool) {
-      Table table = new Table();
-      table.add(LunariansI18n.get("atk_zone_radius")).left().padRight(4.0F).fontScale(0.85F);
-      table.button("-", () -> {
-            paramAttackSlot.zoneRadius = Math.max(1.0F, paramAttackSlot.zoneRadius - 5.0F);
+        }).left();
+        table.add((Element)table3).left().padBottom(4.0f).row();
+        table.add((Element)this.list).growX().row();
+        this.rebuild();
+    }
+
+    private void rebuild() {
+        this.list.clearChildren();
+        Seq<AttackSlot> seq = LunariansSettings.attackSlots;
+        this.list.add((CharSequence)(seq.size + "/10")).color(Pal.accent).padBottom(4.0f).row();
+        if (seq.isEmpty()) {
+            this.list.add((CharSequence)AutoAttackUi.emptyMsg()).wrap().growX().padBottom(4.0f).row();
+        } else {
+            for (int i = 0; i < seq.size; ++i) {
+                this.list.add((Element)this.card((AttackSlot)seq.get(i), i)).growX().padBottom(3.0f).row();
+            }
+        }
+        Table table = new Table();
+        if (seq.size < 10) {
+            table.button((Drawable)Icon.add, Styles.defaulti, () -> {
+                seq.add((Object)new AttackSlot());
+                LunariansSettings.save();
+                AutoAttackUi.reopen();
+            }).size(40.0f).pad(2.0f);
+        }
+        table.button(AutoAttackUi.pasteLabel(), () -> {
+            if (clipboard == null) {
+                if (Vars.ui != null) {
+                    Vars.ui.showInfoToast(AutoAttackUi.noClip(), 2.0f);
+                }
+                return;
+            }
+            if (seq.size >= 10) {
+                return;
+            }
+            seq.add((Object)clipboard.copy());
             LunariansSettings.save();
-            reopen();
-          }).size(32.0F, 28.0F);
-      table.label(() -> String.valueOf((int)paramAttackSlot.zoneRadius)).width(40.0F).center().pad(2.0F);
-      table.button("+", () -> {
-            paramAttackSlot.zoneRadius = Math.min(200.0F, paramAttackSlot.zoneRadius + 5.0F);
+            if (Vars.ui != null) {
+                Vars.ui.showInfoToast(AutoAttackUi.pasted(), 2.0f);
+            }
+            AutoAttackUi.reopen();
+        }).width(90.0f).height(36.0f).pad(2.0f);
+        this.list.add((Element)table).left().padTop(2.0f).row();
+    }
+
+    private Table card(AttackSlot attackSlot, int n) {
+        Table table;
+        int n2;
+        Table table2 = new Table();
+        table2.setBackground(Styles.black6);
+        table2.defaults().growX().pad(4.0f);
+        UnitType unitType = attackSlot.unit == null || attackSlot.unit.isEmpty() ? null : Vars.content.unit(attackSlot.unit);
+        Table table3 = new Table();
+        ImageButton imageButton = new ImageButton((Drawable)(unitType != null ? new TextureRegionDrawable(unitType.uiIcon) : Icon.add), Styles.clearNonei);
+        imageButton.resizeImage(32.0f);
+        imageButton.clicked(() -> this.openUnitPicker(attackSlot));
+        table3.add((Element)imageButton).size(40.0f).padRight(6.0f);
+        table3.add((CharSequence)(unitType != null ? unitType.localizedName : AutoAttackUi.pickUnit())).wrap().growX().left().fontScale(0.9f);
+        table3.button(AutoAttackUi.copyLabel(), () -> {
+            clipboard = attackSlot.copy();
+            if (Vars.ui != null) {
+                Vars.ui.showInfoToast(AutoAttackUi.copied(), 2.0f);
+            }
+        }).width(64.0f).height(32.0f).padLeft(4.0f);
+        table3.button((Drawable)Icon.trash, Styles.defaulti, () -> {
+            LunariansSettings.attackSlots.remove(n);
             LunariansSettings.save();
-            reopen();
-          }).size(32.0F, 28.0F);
-      table1.add((Element)table).left().row();
-    } 
-    return table1;
-  }
-  
-  private void openUnitPicker(AttackSlot paramAttackSlot) {
-    BaseDialog baseDialog = new BaseDialog(pickUnit());
-    baseDialog.cont.pane(paramTable -> {
-          paramTable.defaults().size(48.0F).pad(3.0F);
-          byte b = 0;
-          for (UnitType unitType : Vars.content.units()) {
-            if (unitType == null || unitType.isHidden() || unitType.uiIcon == null)
-              continue; 
-            ImageButton imageButton = new ImageButton((Drawable)new TextureRegionDrawable(unitType.uiIcon), Styles.clearNonei);
-            imageButton.resizeImage(40.0F);
-            imageButton.clicked(());
-            paramTable.add((Element)imageButton).size(48.0F);
-            if (++b % 6 == 0)
-              paramTable.row(); 
-          } 
-        }).maxHeight(360.0F).growX();
-    baseDialog.addCloseButton();
-    baseDialog.show();
-  }
-  
-  private static String tr(String paramString1, String paramString2) {
-    String str = LunariansI18n.getLanguage();
-    if ("pt".equals(str))
-      return paramString2; 
-    if ("es".equals(str))
-      return paramString2; 
-    if ("ru".equals(str))
-      return paramString1; 
-    return paramString1;
-  }
-  
-  private static String title() {
-    return LunariansI18n.get("auto_attack");
-  }
-  
-  private static String hint() {
-    return LunariansI18n.get("atk_hint");
-  }
-  
-  private static String emptyMsg() {
-    return LunariansI18n.get("t_noslots");
-  }
-  
-  private static String pickUnit() {
-    return LunariansI18n.get("t_choose");
-  }
-  
-  private static String maxLabel() {
-    return LunariansI18n.get("t_max");
-  }
-  
-  private static String all() {
-    return LunariansI18n.get("t_all");
-  }
-  
-  private static String mapBtn() {
-    return LunariansI18n.get("t_map");
-  }
-  
-  private static String copyLabel() {
-    return LunariansI18n.get("t_copy");
-  }
-  
-  private static String pasteLabel() {
-    return LunariansI18n.get("t_paste");
-  }
-  
-  private static String copied() {
-    return LunariansI18n.get("atk_copied");
-  }
-  
-  private static String pasted() {
-    return LunariansI18n.get("atk_pasted");
-  }
-  
-  private static String noClip() {
-    return LunariansI18n.get("atk_noclip");
-  }
-  
-  public static BuilderDialog make() {
-    return currentDlg = make0();
-  }
-  
-  private static void reopen() {
-    if (currentDlg != null)
-      currentDlg.hide(); 
-    currentDlg = make();
-  }
+            AutoAttackUi.reopen();
+        }).size(36.0f).padLeft(4.0f);
+        table2.add((Element)table3).growX().row();
+        Table table4 = new Table();
+        table4.add((CharSequence)AutoAttackUi.maxLabel()).left().padRight(4.0f).fontScale(0.85f);
+        table4.button("-", () -> {
+            attackSlot.maxUnits = Math.max(0, attackSlot.maxUnits - 1);
+            LunariansSettings.save();
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        table4.label(() -> attackSlot.maxUnits <= 0 ? AutoAttackUi.all() : String.valueOf(attackSlot.maxUnits)).width(40.0f).center().pad(2.0f);
+        table4.button("+", () -> {
+            attackSlot.maxUnits = Math.min(99, attackSlot.maxUnits + 1);
+            LunariansSettings.save();
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        table2.add((Element)table4).left().padTop(2.0f).row();
+        if (unitType != null) {
+            n2 = AutoAttack.maxStandoffTiles(unitType);
+            table = new Table();
+            table.add((CharSequence)AutoAttackUi.tr("Attack distance", "Dist. ataque")).left().padRight(4.0f).fontScale(0.85f);
+            table.button("-", () -> {
+                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? n2 : (attackSlot.standoffTiles <= 1 ? 0 : --attackSlot.standoffTiles);
+                LunariansSettings.save();
+                AutoAttackUi.reopen();
+            }).size(32.0f, 28.0f);
+            table.label(() -> {
+                if (attackSlot.standoffTiles <= 0) {
+                    return AutoAttackUi.tr("normal", "normal");
+                }
+                return String.valueOf(Mathf.clamp((int)attackSlot.standoffTiles, (int)1, (int)n2));
+            }).width(56.0f).center().pad(2.0f);
+            table.button("+", () -> {
+                attackSlot.standoffTiles = attackSlot.standoffTiles <= 0 ? 1 : Math.min(n2, attackSlot.standoffTiles + 1);
+                LunariansSettings.save();
+                AutoAttackUi.reopen();
+            }).size(32.0f, 28.0f);
+            float f = unitType.maxRange / 8.0f;
+            table.add((CharSequence)(" " + AutoAttackUi.tr("1-" + n2 + " (range " + (int)f + "+2)", "1-" + n2 + " (alcance " + (int)f + "+2)"))).color(Color.lightGray).fontScale(0.7f).padLeft(4.0f);
+            table2.add((Element)table).left().padTop(2.0f).row();
+        }
+        n2 = attackSlot.hasZone() ? 1 : 0;
+        table = new Table();
+        table.add((CharSequence)LunariansI18n.get("atk_zone", n2 != 0 ? attackSlot.x + "," + attackSlot.y + " r" + (int)attackSlot.zoneRadius : LunariansI18n.get("atk_whole_map"))).wrap().growX().left().fontScale(0.85f).color(n2 != 0 ? Color.white : Color.lightGray);
+        table.button(AutoAttackUi.mapBtn(), () -> AutoAttackUi.lambda$card$18(n2 != 0, attackSlot)).width(90.0f).height(32.0f).padLeft(4.0f);
+        table2.add((Element)table).growX().padTop(2.0f).row();
+        if (n2 != 0) {
+            Table table5 = new Table();
+            table5.add((CharSequence)LunariansI18n.get("atk_zone_radius")).left().padRight(4.0f).fontScale(0.85f);
+            table5.button("-", () -> {
+                attackSlot.zoneRadius = Math.max(1.0f, attackSlot.zoneRadius - 5.0f);
+                LunariansSettings.save();
+                AutoAttackUi.reopen();
+            }).size(32.0f, 28.0f);
+            table5.label(() -> String.valueOf((int)attackSlot.zoneRadius)).width(40.0f).center().pad(2.0f);
+            table5.button("+", () -> {
+                attackSlot.zoneRadius = Math.min(200.0f, attackSlot.zoneRadius + 5.0f);
+                LunariansSettings.save();
+                AutoAttackUi.reopen();
+            }).size(32.0f, 28.0f);
+            table2.add((Element)table5).left().row();
+        }
+        return table2;
+    }
+
+    private void openUnitPicker(AttackSlot attackSlot) {
+        BaseDialog baseDialog = new BaseDialog(AutoAttackUi.pickUnit());
+        baseDialog.cont.pane(table -> {
+            table.defaults().size(48.0f).pad(3.0f);
+            int n = 0;
+            for (UnitType unitType : Vars.content.units()) {
+                if (unitType == null || unitType.isHidden() || unitType.uiIcon == null) continue;
+                ImageButton imageButton = new ImageButton((Drawable)new TextureRegionDrawable(unitType.uiIcon), Styles.clearNonei);
+                imageButton.resizeImage(40.0f);
+                imageButton.clicked(() -> {
+                    attackSlot.unit = unitType.name;
+                    attackSlot.standoffTiles = 0;
+                    LunariansSettings.save();
+                    baseDialog.hide();
+                    AutoAttackUi.reopen();
+                });
+                table.add((Element)imageButton).size(48.0f);
+                if (++n % 6 != 0) continue;
+                table.row();
+            }
+        }).maxHeight(360.0f).growX();
+        baseDialog.addCloseButton();
+        baseDialog.show();
+    }
+
+    private static String tr(String string, String string2) {
+        String string3 = LunariansI18n.getLanguage();
+        if ("pt".equals(string3)) {
+            return string2;
+        }
+        if ("es".equals(string3)) {
+            return string2;
+        }
+        if ("ru".equals(string3)) {
+            return string;
+        }
+        return string;
+    }
+
+    private static String title() {
+        return LunariansI18n.get("auto_attack");
+    }
+
+    private static String hint() {
+        return LunariansI18n.get("atk_hint");
+    }
+
+    private static String emptyMsg() {
+        return LunariansI18n.get("t_noslots");
+    }
+
+    private static String pickUnit() {
+        return LunariansI18n.get("t_choose");
+    }
+
+    private static String maxLabel() {
+        return LunariansI18n.get("t_max");
+    }
+
+    private static String all() {
+        return LunariansI18n.get("t_all");
+    }
+
+    private static String mapBtn() {
+        return LunariansI18n.get("t_map");
+    }
+
+    private static String copyLabel() {
+        return LunariansI18n.get("t_copy");
+    }
+
+    private static String pasteLabel() {
+        return LunariansI18n.get("t_paste");
+    }
+
+    private static String copied() {
+        return LunariansI18n.get("atk_copied");
+    }
+
+    private static String pasted() {
+        return LunariansI18n.get("atk_pasted");
+    }
+
+    private static String noClip() {
+        return LunariansI18n.get("atk_noclip");
+    }
+
+    private static /* synthetic */ void lambda$card$18(boolean bl, AttackSlot attackSlot) {
+        if (bl) {
+            attackSlot.x = Integer.MIN_VALUE;
+            attackSlot.y = Integer.MIN_VALUE;
+            attackSlot.zoneRadius = 0.0f;
+        } else if (Vars.player != null && Vars.player.unit() != null) {
+            attackSlot.x = Vars.player.unit().tileX();
+            attackSlot.y = Vars.player.unit().tileY();
+            attackSlot.zoneRadius = Math.max(10.0f, attackSlot.zoneRadius);
+        }
+        LunariansSettings.save();
+        AutoAttackUi.reopen();
+    }
 }
+

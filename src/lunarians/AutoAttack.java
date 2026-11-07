@@ -1,7 +1,47 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.Core
+ *  arc.Events
+ *  arc.graphics.Color
+ *  arc.graphics.g2d.Draw
+ *  arc.graphics.g2d.Lines
+ *  arc.math.Mathf
+ *  arc.math.geom.Position
+ *  arc.math.geom.Vec2
+ *  arc.struct.IntFloatMap
+ *  arc.struct.IntSet
+ *  arc.struct.Seq
+ *  arc.util.Log
+ *  arc.util.Time
+ *  mindustry.Vars
+ *  mindustry.ai.UnitCommand
+ *  mindustry.ai.types.CommandAI
+ *  mindustry.game.EventType$Trigger
+ *  mindustry.game.EventType$WorldLoadEvent
+ *  mindustry.game.Team
+ *  mindustry.gen.Building
+ *  mindustry.gen.Call
+ *  mindustry.gen.Groups
+ *  mindustry.gen.Player
+ *  mindustry.gen.Unit
+ *  mindustry.graphics.Pal
+ *  mindustry.type.UnitType
+ *  mindustry.world.blocks.defense.Wall
+ *  mindustry.world.blocks.defense.turrets.Turret
+ *  mindustry.world.blocks.power.PowerGenerator
+ *  mindustry.world.blocks.production.GenericCrafter
+ *  mindustry.world.blocks.storage.CoreBlock
+ *  mindustry.world.blocks.storage.CoreBlock$CoreBuild
+ *  mindustry.world.blocks.units.UnitFactory
+ *  mindustry.world.meta.BlockGroup
+ */
 package lunarians;
 
 import arc.Core;
 import arc.Events;
+import arc.graphics.Color;
 import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.Lines;
 import arc.math.Mathf;
@@ -12,6 +52,11 @@ import arc.struct.IntSet;
 import arc.struct.Seq;
 import arc.util.Log;
 import arc.util.Time;
+import lunarians.AutoUnitHeal;
+import lunarians.ChatCommands;
+import lunarians.LunariansSettings;
+import lunarians.PathSafe;
+import lunarians.UnitCoord;
 import lunarians.data.AttackSlot;
 import mindustry.Vars;
 import mindustry.ai.UnitCommand;
@@ -21,553 +66,582 @@ import mindustry.game.Team;
 import mindustry.gen.Building;
 import mindustry.gen.Call;
 import mindustry.gen.Groups;
+import mindustry.gen.Player;
 import mindustry.gen.Unit;
 import mindustry.graphics.Pal;
 import mindustry.type.UnitType;
-import mindustry.ui.dialogs.SettingsMenuDialog;
+import mindustry.world.blocks.defense.Wall;
+import mindustry.world.blocks.defense.turrets.Turret;
+import mindustry.world.blocks.power.PowerGenerator;
+import mindustry.world.blocks.production.GenericCrafter;
 import mindustry.world.blocks.storage.CoreBlock;
+import mindustry.world.blocks.units.UnitFactory;
 import mindustry.world.meta.BlockGroup;
 
 public class AutoAttack {
-  private static final float SCAN = 0.7F;
-  
-  private static float timer;
-  
-  private static int count;
-  
-  private static boolean errorLogged;
-  
-  public static int standoffBlocks() {
-    return Math.max(1, Math.min(40, Core.settings.getInt("lunarians-attack-standoff-blocks", 3)));
-  }
-  
-  public static void setStandoffBlocks(int paramInt) {
-    Core.settings.put("lunarians-attack-standoff-blocks", Integer.valueOf(Math.max(1, Math.min(40, paramInt))));
-  }
-  
-  public static int maxStandoffTiles(Unit paramUnit) {
-    if (paramUnit == null || paramUnit.type == null)
-      return 4; 
-    return maxStandoffTiles(paramUnit.type);
-  }
-  
-  public static int maxStandoffTiles(UnitType paramUnitType) {
-    if (paramUnitType == null)
-      return 4; 
-    float f = paramUnitType.maxRange / 8.0F;
-    return Math.max(1, Mathf.ceil(f) + 2);
-  }
-  
-  public static boolean regroupEnabled() {
-    return Core.settings.getBool("lunarians-attack-regroup", false);
-  }
-  
-  public static void setRegroupEnabled(boolean paramBoolean) {
-    Core.settings.put("lunarians-attack-regroup", Boolean.valueOf(paramBoolean));
-  }
-  
-  public static int regroupSec() {
-    return Math.max(5, Math.min(120, Core.settings.getInt("lunarians-attack-regroup-sec", 5)));
-  }
-  
-  public static void setRegroupSec(int paramInt) {
-    Core.settings.put("lunarians-attack-regroup-sec", Integer.valueOf(Math.max(5, Math.min(120, paramInt))));
-  }
-  
-  public static float standoffDist(Unit paramUnit, AttackSlot paramAttackSlot) {
-    int i = maxStandoffTiles(paramUnit);
-    boolean bool = (paramAttackSlot != null) ? paramAttackSlot.standoffTiles : false;
-    int j = bool ? i : Mathf.clamp(bool, 1, i);
-    return (j * 8);
-  }
-  
-  public static float standoffDist(Unit paramUnit) {
-    return standoffDist(paramUnit, null);
-  }
-  
-  public static void init() {
-    if (Vars.headless)
-      return; 
-    Events.run(EventType.Trigger.update, AutoAttack::update);
-    if (!drawReg) {
-      drawReg = true;
-      Events.run(EventType.Trigger.draw, AutoAttack::drawOverlay);
-    } 
-    ChatCommands.init();
-    Events.on(EventType.WorldLoadEvent.class, paramWorldLoadEvent -> reset());
-    try {
-      if (Vars.ui != null && Vars.ui.settings != null)
-        Vars.ui.settings.addCategory("Lunarians Attack", paramSettingsTable -> {
-              label("lunarians-attack-standoff-blocks", "Attack distance", "Distancia de ataque");
-              label("lunarians-attack-regroup", "Regroup periodically", "Reagrupar periodicamente");
-              label("lunarians-attack-regroup-sec", "Regroup interval", "Intervalo de reagrupar");
-              label("lunarians-attack-smart", "Smart targets (turrets first)", "Alvos inteligentes (torres primeiro)");
-              label("lunarians-attack-flee", "Retreat below HP %", "Recuar abaixo de % de vida");
-              label("lunarians-attack-formation", "Formation + gather before advancing", "Formacao + juntar antes de avancar");
-              label("lunarians-heal-escort", "Healer escort (open lane / shield)", "Escolta do curandeiro (abre caminho / protege)");
-              label("lunarians-attack-overlay", "Show zones and targets on map", "Mostrar zonas e alvos no mapa");
-              paramSettingsTable.sliderPref("lunarians-attack-standoff-blocks", 3, 1, 40, 1, ());
-              paramSettingsTable.checkPref("lunarians-attack-regroup", false);
-              paramSettingsTable.sliderPref("lunarians-attack-regroup-sec", 5, 5, 60, 1, ());
-              paramSettingsTable.checkPref("lunarians-attack-smart", true);
-              paramSettingsTable.sliderPref("lunarians-attack-flee", 0, 0, 90, 5, ());
-              paramSettingsTable.checkPref("lunarians-attack-formation", true);
-              paramSettingsTable.checkPref("lunarians-heal-escort", true);
-              paramSettingsTable.checkPref("lunarians-attack-overlay", true);
-              paramSettingsTable.row();
-              paramSettingsTable.button(tr("Profile: Defend (retreat 40%)", "Perfil: Defender (recua 40%)"), ()).growX().height(40.0F).row();
-              paramSettingsTable.button(tr("Profile: Balanced (retreat 25%)", "Perfil: Equilibrado (recua 25%)"), ()).growX().height(40.0F).row();
-              paramSettingsTable.button(tr("Profile: Rush (no retreat)", "Perfil: Rush (sem recuo)"), ()).growX().height(40.0F).row();
-            }); 
-    } catch (Throwable throwable) {}
-  }
-  
-  public static void reset() {
-    timer = 0.0F;
-    count = 0;
-    lastHp.clear();
-    dpsEst.clear();
-    claimed.clear();
-    lastScanTime = -1.0F;
-    lastRegroupAt = 0.0F;
-    fleeing.clear();
-    enemyB.clear();
-    fleeStart.clear();
-    gatherSince.clear();
-    lines.clear();
-    shown.clear();
-  }
-  
-  private static void update() {
-    if (!LunariansSettings.enableAutoAttack || Vars.state == null || !Vars.state.isGame() || Vars.player == null)
-      return; 
-    timer += Time.delta / 60.0F;
-    if (timer < LunariansSettings.actionInterval(0.7F))
-      return; 
-    float f = timer;
-    timer = 0.0F;
-    try {
-      scan(f);
-    } catch (Throwable throwable) {
-      if (!errorLogged) {
-        errorLogged = true;
-        Log.err("[Lunarians] AutoAttack error", throwable);
-      } 
-    } 
-  }
-  
-  private static Unit nearestHealer(Unit paramUnit) {
-    Unit unit = null;
-    float f = Float.MAX_VALUE;
-    for (byte b = 0; b < Groups.unit.size(); b++) {
-      Unit unit1 = (Unit)Groups.unit.index(b);
-      if (unit1 != null && unit1.isValid() && unit1.team == Vars.player.team() && AutoUnitHeal.isActiveHealer(unit1.id)) {
-        float f1 = paramUnit.dst((Position)unit1);
-        if (f1 < f) {
-          f = f1;
-          unit = unit1;
-        } 
-      } 
-    } 
-    return unit;
-  }
-  
-  private static boolean isCore(Building paramBuilding) {
-    return (paramBuilding != null && paramBuilding.block instanceof CoreBlock);
-  }
-  
-  private static float coreSafeDist(Building paramBuilding) {
-    return (paramBuilding.block.size * 8) * 0.7F + 48.0F + 24.0F;
-  }
-  
-  private static void trackDamage(Unit paramUnit, float paramFloat) {
-    float f1 = lastHp.get(paramUnit.id, paramUnit.health);
-    float f2 = Math.max(0.0F, f1 - paramUnit.health);
-    float f3 = (paramFloat > 0.05F) ? (f2 / paramFloat) : 0.0F;
-    float f4 = dpsEst.get(paramUnit.id, 0.0F);
-    dpsEst.put(paramUnit.id, f4 * 0.55F + f3 * 0.45F);
-    lastHp.put(paramUnit.id, paramUnit.health);
-  }
-  
-  private static boolean isHighDamage(Unit paramUnit) {
-    float f = dpsEst.get(paramUnit.id, 0.0F);
-    return (f > Math.max(4.0F, paramUnit.maxHealth * 0.08F));
-  }
-  
-  private static boolean groupLowDamage(Seq<Unit> paramSeq) {
-    if (paramSeq.isEmpty())
-      return true; 
-    byte b1 = 0;
-    for (byte b2 = 0; b2 < paramSeq.size; b2++) {
-      if (isHighDamage((Unit)paramSeq.get(b2)))
-        b1++; 
-    } 
-    return (b1 * 2 <= paramSeq.size);
-  }
-  
-  private static void ensureMove(Unit paramUnit) {
-    if (!(paramUnit.controller() instanceof CommandAI))
-      return; 
-    CommandAI commandAI = (CommandAI)paramUnit.controller();
-    if (commandAI.command != UnitCommand.moveCommand)
-      Call.setUnitCommand(Vars.player, new int[] { paramUnit.id }, UnitCommand.moveCommand); 
-  }
-  
-  private static void commandBuild(Unit paramUnit, Building paramBuilding, float paramFloat, boolean paramBoolean) {
-    ensureMove(paramUnit);
-    float f1 = paramBuilding.angleTo((Position)paramUnit) * 0.017453292F;
-    float f2 = paramFloat * 0.9F;
-    if (paramBoolean && isCore(paramBuilding))
-      f2 = Math.max(f2, coreSafeDist(paramBuilding) * 0.95F); 
-    float f3 = paramBuilding.x + Mathf.cos(f1) * f2;
-    float f4 = paramBuilding.y + Mathf.sin(f1) * f2;
-    Vec2 vec2 = PathSafe.safeNear(paramUnit, f3, f4, 64.0F);
-    UnitCoord.cmd(paramUnit, 1, 90.0F, paramBuilding, null, vec2);
-  }
-  
-  private static void holdAwayFromCore(Unit paramUnit, Building paramBuilding, float paramFloat) {
-    ensureMove(paramUnit);
-    float f1 = Math.max(paramFloat * 0.95F, coreSafeDist(paramBuilding));
-    float f2 = paramBuilding.angleTo((Position)paramUnit) * 0.017453292F;
-    float f3 = paramBuilding.x + Mathf.cos(f2) * f1;
-    float f4 = paramBuilding.y + Mathf.sin(f2) * f1;
-    Vec2 vec2 = PathSafe.safeNear(paramUnit, f3, f4, 80.0F);
-    UnitCoord.cmd(paramUnit, 1, 90.0F, null, null, vec2);
-  }
-  
-  private static void commandBuildFormation(Unit paramUnit, Building paramBuilding, float paramFloat1, float paramFloat2, int paramInt) {
-    ensureMove(paramUnit);
-    float f1 = paramBuilding.angleTo((Position)paramUnit) * 0.017453292F;
-    float f2 = (paramInt <= 1) ? 0.0F : ((paramFloat2 - (paramInt - 1) * 0.5F) * 0.35F);
-    float f3 = f1 + f2;
-    float f4 = paramFloat1 * 0.9F;
-    float f5 = paramBuilding.x + Mathf.cos(f3) * f4;
-    float f6 = paramBuilding.y + Mathf.sin(f3) * f4;
-    Vec2 vec2 = PathSafe.safeNear(paramUnit, f5, f6, 64.0F);
-    UnitCoord.cmd(paramUnit, 1, 90.0F, paramBuilding, null, vec2);
-  }
-  
-  private static void regroupSlot(Seq<Unit> paramSeq) {
-    if (paramSeq.size < 2)
-      return; 
-    float f1 = 0.0F;
-    float f2 = 0.0F;
-    byte b;
-    for (b = 0; b < paramSeq.size; b++) {
-      f1 += ((Unit)paramSeq.get(b)).x;
-      f2 += ((Unit)paramSeq.get(b)).y;
-    } 
-    f1 /= paramSeq.size;
-    f2 /= paramSeq.size;
-    for (b = 0; b < paramSeq.size; b++) {
-      Unit unit = (Unit)paramSeq.get(b);
-      ensureMove(unit);
-      float f3 = b * 360.0F / paramSeq.size * 0.017453292F;
-      float f4 = Mathf.cos(f3) * 16.0F;
-      float f5 = Mathf.sin(f3) * 16.0F;
-      Vec2 vec2 = PathSafe.safeNear(unit, f1 + f4, f2 + f5, 48.0F);
-      UnitCoord.cmd(unit, 1, 90.0F, null, null, vec2);
-      count++;
-    } 
-  }
-  
-  private static void scan(float paramFloat) {
-    Seq<AttackSlot> seq = LunariansSettings.attackSlots;
-    if (seq.isEmpty())
-      return; 
-    count = 0;
-    lines.clear();
-    claimed.clear();
-    int i = Groups.unit.size();
-    enemyB.clear();
-    for (Building building : Groups.build) {
-      if (building == null || !building.isValid() || building.team == Vars.player.team() || building.team == Team.derelict)
-        continue; 
-      enemyB.add(building);
-    } 
-    boolean bool1 = (regroupEnabled() && Time.time - lastRegroupAt >= regroupSec() * 60.0F) ? true : false, bool2 = bool1;
-    if (bool1)
-      lastRegroupAt = Time.time; 
-    for (byte b = 0; b < seq.size; b++) {
-      AttackSlot attackSlot = (AttackSlot)seq.get(b);
-      if (!attackSlot.ready())
-        continue; 
-      Seq<Unit> seq1 = new Seq();
-      byte b1;
-      for (b1 = 0; b1 < i; b1++) {
-        Unit unit1 = (Unit)Groups.unit.index(b1);
-        if (unit1 != null && unit1.isValid() && unit1.team == Vars.player.team() && !claimed.contains(unit1.id) && UnitCoord.holder(unit1.id) != 2 && UnitCoord.holder(unit1.id) != 3 && !AutoUnitHeal.isActiveHealer(unit1.id) && !AutoUnitHeal.isHealerType(unit1.type) && attackSlot.unit.equals(unit1.type.name) && unit1.controller() instanceof CommandAI)
-          seq1.add(unit1); 
-      } 
-      if (attackSlot.maxUnits > 0 && seq1.size > attackSlot.maxUnits)
-        seq1.truncate(attackSlot.maxUnits); 
-      if (seq1.isEmpty())
-        continue; 
-      for (b1 = 0; b1 < seq1.size; b1++) {
-        claimed.add(((Unit)seq1.get(b1)).id);
-        trackDamage((Unit)seq1.get(b1), paramFloat);
-      } 
-      int j = fleePercent();
-      if (j > 0) {
-        CoreBlock.CoreBuild coreBuild = Vars.player.closestCore();
-        for (int k = seq1.size - 1; k >= 0; k--) {
-          Unit unit1 = (Unit)seq1.get(k);
-          float f = unit1.health / Math.max(1.0F, unit1.maxHealth);
-          boolean bool5 = fleeing.contains(unit1.id);
-          if (!bool5 && f * 100.0F < j) {
-            fleeing.add(unit1.id);
-            fleeStart.put(unit1.id, Time.time);
-            bool5 = true;
-          } else if (bool5 && (f >= 0.8F || Time.time - fleeStart.get(unit1.id, 0.0F) > 3600.0F)) {
-            fleeing.remove(unit1.id);
-            bool5 = false;
-          } 
-          if (bool5) {
-            Unit unit2 = LunariansSettings.autoAttackHeal ? nearestHealer(unit1) : null;
-            if (unit2 != null) {
-              Vec2 vec2 = PathSafe.safeNear(unit1, unit2.x, unit2.y, 48.0F);
-              if (UnitCoord.cmd(unit1, 4, 90.0F, null, null, vec2))
-                count++; 
-            } else if (coreBuild != null && unit1.dst((Position)coreBuild) > 96.0F) {
-              Vec2 vec2 = PathSafe.safeNear(unit1, ((Building)coreBuild).x + 32.0F, ((Building)coreBuild).y + 32.0F, 64.0F);
-              if (UnitCoord.cmd(unit1, 4, 90.0F, null, null, vec2))
-                count++; 
-            } 
-            seq1.remove(k);
-          } 
-        } 
-        if (seq1.isEmpty())
-          continue; 
-      } 
-      if (bool1) {
-        regroupSlot(seq1);
-        continue;
-      } 
-      float f2 = attackSlot.hasZone() ? ((attackSlot.x * 8) + 4.0F) : ((Unit)seq1.first()).x;
-      float f1 = attackSlot.hasZone() ? ((attackSlot.y * 8) + 4.0F) : ((Unit)seq1.first()).y, f3 = f1;
-      if (!attackSlot.hasZone()) {
-        f2 = 0.0F;
-        f1 = 0.0F;
-        for (byte b4 = 0; b4 < seq1.size; b4++) {
-          f2 += ((Unit)seq1.get(b4)).x;
-          f1 += ((Unit)seq1.get(b4)).y;
-        } 
-        f2 /= seq1.size;
-        f1 /= seq1.size;
-      } 
-      Seq seq2 = new Seq();
-      boolean bool = false;
-      for (Building building : enemyB) {
-        if (attackSlot.hasZone() && Mathf.dst(f2, f1, building.x, building.y) > attackSlot.zoneRadius * 8.0F)
-          continue; 
-        seq2.add(building);
-        if (building.block instanceof mindustry.world.blocks.defense.turrets.Turret)
-          bool = true; 
-      } 
-      boolean bool3 = smartTargets();
-      Building building2 = null;
-      Building building1 = null;
-      float f4 = Float.MAX_VALUE;
-      float f5 = Float.MAX_VALUE;
-      float f6 = Float.MAX_VALUE;
-      for (byte b2 = 0; b2 < seq2.size; b2++) {
-        Building building = (Building)seq2.get(b2);
-        float f = 0.0F;
-        for (byte b4 = 0; b4 < seq1.size; b4++)
-          f += ((Unit)seq1.get(b4)).dst((Position)building); 
-        f /= Math.max(1, seq1.size);
-        if (isCore(building)) {
-          if (f < f4) {
-            f4 = f;
-            building2 = building;
-          } 
-        } else {
-          float f8 = f;
-          if (bool3) {
-            boolean bool5 = (building.block instanceof mindustry.world.blocks.defense.Wall || building.block.group == BlockGroup.transportation) ? true : false;
-            if (building.block instanceof mindustry.world.blocks.defense.turrets.Turret) {
-              if (f < 640.0F)
-                f8 -= 240.0F; 
-            } else if (building.block instanceof mindustry.world.blocks.power.PowerGenerator) {
-              f8 -= 96.0F;
-            } else if (building.block instanceof mindustry.world.blocks.units.UnitFactory || building.block instanceof mindustry.world.blocks.production.GenericCrafter) {
-              f8 -= 64.0F;
-            } else if (bool5) {
-              f8 += bool ? 800.0F : 160.0F;
-            } 
-          } 
-          if (f8 < f5) {
-            f5 = f8;
-            f6 = f;
-            building1 = building;
-          } 
-        } 
-      } 
-      float f7 = Math.min(f4, f6);
-      if (formationOn() && !attackSlot.hasZone() && seq1.size > 1 && f7 > 240.0F) {
-        float f = 0.0F;
-        for (byte b4 = 0; b4 < seq1.size; b4++)
-          f = Math.max(f, ((Unit)seq1.get(b4)).dst(f2, f1)); 
-        if (f > 144.0F) {
-          float f8 = gatherSince.get(b, -1.0F);
-          if (f8 < 0.0F) {
-            gatherSince.put(b, Time.time);
-            f8 = Time.time;
-          } 
-          if (Time.time - f8 < 600.0F) {
-            regroupSlot(seq1);
-            continue;
-          } 
-        } else {
-          gatherSince.put(b, -1.0F);
-        } 
-      } 
-      if (overlayOn()) {
-        if (building1 != null)
-          lines.add(new float[] { f2, f1, building1.x, building1.y, 0.0F }); 
-        if (building2 != null)
-          lines.add(new float[] { f2, f1, building2.x, building2.y, 1.0F }); 
-        if (attackSlot.hasZone())
-          lines.add(new float[] { (attackSlot.x * 8) + 4.0F, (attackSlot.y * 8) + 4.0F, attackSlot.zoneRadius * 8.0F, 0.0F, 2.0F }); 
-      } 
-      seq1.sort(paramUnit -> -paramUnit.maxHealth);
-      Unit unit = (building2 != null) ? pickCoreBreaker(seq1, building2) : null;
-      boolean bool4 = groupLowDamage(seq1);
-      for (byte b3 = 0; b3 < seq1.size; b3++) {
-        Unit unit1 = (Unit)seq1.get(b3);
-        float f = standoffDist(unit1, attackSlot);
-        if (building2 != null && isHighDamage(unit1) && !bool4) {
-          holdAwayFromCore(unit1, building2, f);
-          count++;
-        } else if (unit1 == unit && building2 != null && bool4) {
-          commandBuild(unit1, building2, f, true);
-          count++;
-        } else if (building1 != null) {
-          float f9 = unit1.dst(f2, f1);
-          float f8;
-          if (f9 > (f8 = 40.0F) * 1.35F + 40.0F) {
-            ensureMove(unit1);
-            float f10 = b3 * 360.0F / seq1.size * 0.017453292F;
-            UnitCoord.cmd(unit1, 1, 90.0F, null, null, new Vec2(f2 + Mathf.cos(f10) * 18.0F, f1 + Mathf.sin(f10) * 18.0F));
-            count++;
-          } else {
-            commandBuildFormation(unit1, building1, f, formationOn() ? (((b3 == 0) ? false : (((b3 & 0x1) == 1) ? ((b3 + 1) / 2) : (-b3 / 2))) + (seq1.size - 1) * 0.5F) : b3, seq1.size);
-            count++;
-          } 
-        } else if (building2 != null) {
-          holdAwayFromCore(unit1, building2, f);
-          count++;
-        } 
-      } 
-      continue;
-    } 
-    shown.clear();
-    shown.addAll(lines);
-  }
-  
-  private static Unit pickCoreBreaker(Seq<Unit> paramSeq, Building paramBuilding) {
-    Unit unit = null;
-    float f = Float.MAX_VALUE;
-    for (byte b = 0; b < paramSeq.size; b++) {
-      Unit unit1 = (Unit)paramSeq.get(b);
-      float f1;
-      if (!isHighDamage(unit1) && (f1 = unit1.dst((Position)paramBuilding) - unit1.health / Math.max(1.0F, unit1.maxHealth) * 40.0F) < f) {
-        f = f1;
-        unit = unit1;
-      } 
-    } 
-    return (unit != null) ? unit : (Unit)paramSeq.first();
-  }
-  
-  private static final IntSet claimed = new IntSet();
-  
-  private static final IntFloatMap lastHp = new IntFloatMap();
-  
-  private static final IntFloatMap dpsEst = new IntFloatMap();
-  
-  private static float lastScanTime = -1.0F;
-  
-  private static float lastRegroupAt;
-  
-  public static final String KEY_STANDOFF = "lunarians-attack-standoff-blocks";
-  
-  public static final String KEY_REGROUP = "lunarians-attack-regroup";
-  
-  public static final String KEY_REGROUP_SEC = "lunarians-attack-regroup-sec";
-  
-  private static final IntSet fleeing = new IntSet();
-  
-  private static final IntFloatMap fleeStart = new IntFloatMap();
-  
-  private static final IntFloatMap gatherSince = new IntFloatMap();
-  
-  private static final Seq<Building> enemyB = new Seq();
-  
-  private static final Seq<float[]> lines = new Seq();
-  
-  private static final Seq<float[]> shown = new Seq();
-  
-  private static boolean drawReg;
-  
-  public static boolean smartTargets() {
-    return Core.settings.getBool("lunarians-attack-smart", true);
-  }
-  
-  public static boolean formationOn() {
-    return Core.settings.getBool("lunarians-attack-formation", true);
-  }
-  
-  public static boolean overlayOn() {
-    return Core.settings.getBool("lunarians-attack-overlay", true);
-  }
-  
-  public static int fleePercent() {
-    return Math.max(0, Math.min(90, Core.settings.getInt("lunarians-attack-flee", 0)));
-  }
-  
-  private static boolean pt() {
-    return (LunariansSettings.language != null && LunariansSettings.language.startsWith("pt"));
-  }
-  
-  private static String tr(String paramString1, String paramString2) {
-    return pt() ? paramString2 : paramString1;
-  }
-  
-  private static void label(String paramString1, String paramString2, String paramString3) {
-    try {
-      Core.bundle.getProperties().put("setting." + paramString1 + ".name", tr(paramString2, paramString3));
-    } catch (Throwable throwable) {}
-  }
-  
-  private static void profile(int paramInt1, int paramInt2, int paramInt3) {
-    Core.settings.put("lunarians-attack-smart", Boolean.valueOf((paramInt1 == 1)));
-    Core.settings.put("lunarians-attack-flee", Integer.valueOf(paramInt2));
-    Core.settings.put("lunarians-attack-formation", Boolean.valueOf((paramInt3 == 1)));
-    if (Vars.ui != null)
-      Vars.ui.showInfoToast(tr("Profile applied. Reopen this menu to see the values.", "Perfil aplicado. Reabra o menu para ver os valores."), 3.0F); 
-  }
-  
-  private static void drawOverlay() {
-    if (Vars.state == null || !Vars.state.isGame() || !LunariansSettings.enableAutoAttack || !overlayOn())
-      return; 
-    Draw.z(120.0F);
-    for (byte b = 0; b < shown.size; b++) {
-      float[] arrayOfFloat = (float[])shown.get(b);
-      if (arrayOfFloat[4] == 2.0F) {
-        Draw.color(Pal.accent, 0.8F);
-        Lines.stroke(1.5F);
-        Lines.circle(arrayOfFloat[0], arrayOfFloat[1], arrayOfFloat[2]);
-      } else {
-        Draw.color((arrayOfFloat[4] == 1.0F) ? Pal.remove : Pal.lightishOrange, 0.8F);
-        Lines.stroke(1.2F);
-        Lines.line(arrayOfFloat[0], arrayOfFloat[1], arrayOfFloat[2], arrayOfFloat[3]);
-        Lines.circle(arrayOfFloat[2], arrayOfFloat[3], 6.0F);
-      } 
-    } 
-    Draw.reset();
-  }
-  
-  public static int count() {
-    return count;
-  }
+    private static final float SCAN = 0.7f;
+    private static float timer;
+    private static int count;
+    private static boolean errorLogged;
+    private static final IntSet claimed;
+    private static final IntFloatMap lastHp;
+    private static final IntFloatMap dpsEst;
+    private static float lastScanTime;
+    private static float lastRegroupAt;
+    public static final String KEY_STANDOFF = "lunarians-attack-standoff-blocks";
+    public static final String KEY_REGROUP = "lunarians-attack-regroup";
+    public static final String KEY_REGROUP_SEC = "lunarians-attack-regroup-sec";
+    private static final IntSet fleeing;
+    private static final IntFloatMap fleeStart;
+    private static final IntFloatMap gatherSince;
+    private static final Seq<Building> enemyB;
+    private static final Seq<float[]> lines;
+    private static final Seq<float[]> shown;
+    private static boolean drawReg;
+
+    public static int standoffBlocks() {
+        return Math.max(1, Math.min(40, Core.settings.getInt(KEY_STANDOFF, 3)));
+    }
+
+    public static void setStandoffBlocks(int n) {
+        Core.settings.put(KEY_STANDOFF, (Object)Math.max(1, Math.min(40, n)));
+    }
+
+    public static int maxStandoffTiles(Unit unit) {
+        if (unit == null || unit.type == null) {
+            return 4;
+        }
+        return AutoAttack.maxStandoffTiles(unit.type);
+    }
+
+    public static int maxStandoffTiles(UnitType unitType) {
+        if (unitType == null) {
+            return 4;
+        }
+        float f = unitType.maxRange / 8.0f;
+        return Math.max(1, Mathf.ceil((float)f) + 2);
+    }
+
+    public static boolean regroupEnabled() {
+        return Core.settings.getBool(KEY_REGROUP, false);
+    }
+
+    public static void setRegroupEnabled(boolean bl) {
+        Core.settings.put(KEY_REGROUP, (Object)bl);
+    }
+
+    public static int regroupSec() {
+        return Math.max(5, Math.min(120, Core.settings.getInt(KEY_REGROUP_SEC, 5)));
+    }
+
+    public static void setRegroupSec(int n) {
+        Core.settings.put(KEY_REGROUP_SEC, (Object)Math.max(5, Math.min(120, n)));
+    }
+
+    public static float standoffDist(Unit unit, AttackSlot attackSlot) {
+        int n = AutoAttack.maxStandoffTiles(unit);
+        int n2 = attackSlot != null ? attackSlot.standoffTiles : 0;
+        int n3 = n2 <= 0 ? n : Mathf.clamp((int)n2, (int)1, (int)n);
+        return n3 * 8;
+    }
+
+    public static float standoffDist(Unit unit) {
+        return AutoAttack.standoffDist(unit, null);
+    }
+
+    public static void init() {
+        if (Vars.headless) {
+            return;
+        }
+        Events.run((Object)EventType.Trigger.update, AutoAttack::update);
+        if (!drawReg) {
+            drawReg = true;
+            Events.run((Object)EventType.Trigger.draw, AutoAttack::drawOverlay);
+        }
+        ChatCommands.init();
+        Events.on(EventType.WorldLoadEvent.class, worldLoadEvent -> AutoAttack.reset());
+        try {
+            if (Vars.ui != null && Vars.ui.settings != null) {
+                Vars.ui.settings.addCategory("Lunarians Attack", settingsTable -> {
+                    AutoAttack.label(KEY_STANDOFF, "Attack distance", "Distancia de ataque");
+                    AutoAttack.label(KEY_REGROUP, "Regroup periodically", "Reagrupar periodicamente");
+                    AutoAttack.label(KEY_REGROUP_SEC, "Regroup interval", "Intervalo de reagrupar");
+                    AutoAttack.label("lunarians-attack-smart", "Smart targets (turrets first)", "Alvos inteligentes (torres primeiro)");
+                    AutoAttack.label("lunarians-attack-flee", "Retreat below HP %", "Recuar abaixo de % de vida");
+                    AutoAttack.label("lunarians-attack-formation", "Formation + gather before advancing", "Formacao + juntar antes de avancar");
+                    AutoAttack.label("lunarians-heal-escort", "Healer escort (open lane / shield)", "Escolta do curandeiro (abre caminho / protege)");
+                    AutoAttack.label("lunarians-attack-overlay", "Show zones and targets on map", "Mostrar zonas e alvos no mapa");
+                    settingsTable.sliderPref(KEY_STANDOFF, 3, 1, 40, 1, n -> n + " tiles");
+                    settingsTable.checkPref(KEY_REGROUP, false);
+                    settingsTable.sliderPref(KEY_REGROUP_SEC, 5, 5, 60, 1, n -> n + "s");
+                    settingsTable.checkPref("lunarians-attack-smart", true);
+                    settingsTable.sliderPref("lunarians-attack-flee", 0, 0, 90, 5, n -> n == 0 ? AutoAttack.tr("off", "desligado") : n + "%");
+                    settingsTable.checkPref("lunarians-attack-formation", true);
+                    settingsTable.checkPref("lunarians-heal-escort", true);
+                    settingsTable.checkPref("lunarians-attack-overlay", true);
+                    settingsTable.row();
+                    settingsTable.button(AutoAttack.tr("Profile: Defend (retreat 40%)", "Perfil: Defender (recua 40%)"), () -> AutoAttack.profile(1, 40, 1)).growX().height(40.0f).row();
+                    settingsTable.button(AutoAttack.tr("Profile: Balanced (retreat 25%)", "Perfil: Equilibrado (recua 25%)"), () -> AutoAttack.profile(1, 25, 1)).growX().height(40.0f).row();
+                    settingsTable.button(AutoAttack.tr("Profile: Rush (no retreat)", "Perfil: Rush (sem recuo)"), () -> AutoAttack.profile(0, 0, 0)).growX().height(40.0f).row();
+                });
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    public static void reset() {
+        timer = 0.0f;
+        count = 0;
+        lastHp.clear();
+        dpsEst.clear();
+        claimed.clear();
+        lastScanTime = -1.0f;
+        lastRegroupAt = 0.0f;
+        fleeing.clear();
+        enemyB.clear();
+        fleeStart.clear();
+        gatherSince.clear();
+        lines.clear();
+        shown.clear();
+    }
+
+    private static void update() {
+        block4: {
+            if (!LunariansSettings.enableAutoAttack || Vars.state == null || !Vars.state.isGame() || Vars.player == null) {
+                return;
+            }
+            if ((timer += Time.delta / 60.0f) < LunariansSettings.actionInterval(0.7f)) {
+                return;
+            }
+            float f = timer;
+            timer = 0.0f;
+            try {
+                AutoAttack.scan(f);
+            }
+            catch (Throwable throwable) {
+                if (errorLogged) break block4;
+                errorLogged = true;
+                Log.err((String)"[Lunarians] AutoAttack error", (Throwable)throwable);
+            }
+        }
+    }
+
+    private static Unit nearestHealer(Unit unit) {
+        Unit unit2 = null;
+        float f = Float.MAX_VALUE;
+        for (int i = 0; i < Groups.unit.size(); ++i) {
+            float f2;
+            Unit unit3 = (Unit)Groups.unit.index(i);
+            if (unit3 == null || !unit3.isValid() || unit3.team != Vars.player.team() || !AutoUnitHeal.isActiveHealer(unit3.id) || !((f2 = unit.dst((Position)unit3)) < f)) continue;
+            f = f2;
+            unit2 = unit3;
+        }
+        return unit2;
+    }
+
+    private static boolean isCore(Building building) {
+        return building != null && building.block instanceof CoreBlock;
+    }
+
+    private static float coreSafeDist(Building building) {
+        return (float)(building.block.size * 8) * 0.7f + 48.0f + 24.0f;
+    }
+
+    private static void trackDamage(Unit unit, float f) {
+        float f2 = lastHp.get(unit.id, unit.health);
+        float f3 = Math.max(0.0f, f2 - unit.health);
+        float f4 = f > 0.05f ? f3 / f : 0.0f;
+        float f5 = dpsEst.get(unit.id, 0.0f);
+        dpsEst.put(unit.id, f5 * 0.55f + f4 * 0.45f);
+        lastHp.put(unit.id, unit.health);
+    }
+
+    private static boolean isHighDamage(Unit unit) {
+        float f = dpsEst.get(unit.id, 0.0f);
+        return f > Math.max(4.0f, unit.maxHealth * 0.08f);
+    }
+
+    private static boolean groupLowDamage(Seq<Unit> seq) {
+        if (seq.isEmpty()) {
+            return true;
+        }
+        int n = 0;
+        for (int i = 0; i < seq.size; ++i) {
+            if (!AutoAttack.isHighDamage((Unit)seq.get(i))) continue;
+            ++n;
+        }
+        return n * 2 <= seq.size;
+    }
+
+    private static void ensureMove(Unit unit) {
+        if (!(unit.controller() instanceof CommandAI)) {
+            return;
+        }
+        CommandAI commandAI = (CommandAI)unit.controller();
+        if (commandAI.command != UnitCommand.moveCommand) {
+            Call.setUnitCommand((Player)Vars.player, (int[])new int[]{unit.id}, (UnitCommand)UnitCommand.moveCommand);
+        }
+    }
+
+    private static void commandBuild(Unit unit, Building building, float f, boolean bl) {
+        AutoAttack.ensureMove(unit);
+        float f2 = building.angleTo((Position)unit) * ((float)Math.PI / 180);
+        float f3 = f * 0.9f;
+        if (bl && AutoAttack.isCore(building)) {
+            f3 = Math.max(f3, AutoAttack.coreSafeDist(building) * 0.95f);
+        }
+        float f4 = building.x + Mathf.cos((float)f2) * f3;
+        float f5 = building.y + Mathf.sin((float)f2) * f3;
+        Vec2 vec2 = PathSafe.safeNear(unit, f4, f5, 64.0f);
+        UnitCoord.cmd(unit, 1, 90.0f, building, null, vec2);
+    }
+
+    private static void holdAwayFromCore(Unit unit, Building building, float f) {
+        AutoAttack.ensureMove(unit);
+        float f2 = Math.max(f * 0.95f, AutoAttack.coreSafeDist(building));
+        float f3 = building.angleTo((Position)unit) * ((float)Math.PI / 180);
+        float f4 = building.x + Mathf.cos((float)f3) * f2;
+        float f5 = building.y + Mathf.sin((float)f3) * f2;
+        Vec2 vec2 = PathSafe.safeNear(unit, f4, f5, 80.0f);
+        UnitCoord.cmd(unit, 1, 90.0f, null, null, vec2);
+    }
+
+    private static void commandBuildFormation(Unit unit, Building building, float f, float f2, int n) {
+        AutoAttack.ensureMove(unit);
+        float f3 = building.angleTo((Position)unit) * ((float)Math.PI / 180);
+        float f4 = n <= 1 ? 0.0f : (f2 - (float)(n - 1) * 0.5f) * 0.35f;
+        float f5 = f3 + f4;
+        float f6 = f * 0.9f;
+        float f7 = building.x + Mathf.cos((float)f5) * f6;
+        float f8 = building.y + Mathf.sin((float)f5) * f6;
+        Vec2 vec2 = PathSafe.safeNear(unit, f7, f8, 64.0f);
+        UnitCoord.cmd(unit, 1, 90.0f, building, null, vec2);
+    }
+
+    private static void regroupSlot(Seq<Unit> seq) {
+        int n;
+        if (seq.size < 2) {
+            return;
+        }
+        float f = 0.0f;
+        float f2 = 0.0f;
+        for (n = 0; n < seq.size; ++n) {
+            f += ((Unit)seq.get((int)n)).x;
+            f2 += ((Unit)seq.get((int)n)).y;
+        }
+        f /= (float)seq.size;
+        f2 /= (float)seq.size;
+        for (n = 0; n < seq.size; ++n) {
+            Unit unit = (Unit)seq.get(n);
+            AutoAttack.ensureMove(unit);
+            float f3 = (float)n * 360.0f / (float)seq.size * ((float)Math.PI / 180);
+            float f4 = Mathf.cos((float)f3) * 16.0f;
+            float f5 = Mathf.sin((float)f3) * 16.0f;
+            Vec2 vec2 = PathSafe.safeNear(unit, f + f4, f2 + f5, 48.0f);
+            UnitCoord.cmd(unit, 1, 90.0f, null, null, vec2);
+            ++count;
+        }
+    }
+
+    private static void scan(float f) {
+        Seq<AttackSlot> seq = LunariansSettings.attackSlots;
+        if (seq.isEmpty()) {
+            return;
+        }
+        count = 0;
+        lines.clear();
+        claimed.clear();
+        int n = Groups.unit.size();
+        enemyB.clear();
+        for (Building building : Groups.build) {
+            if (building == null || !building.isValid() || building.team == Vars.player.team() || building.team == Team.derelict) continue;
+            enemyB.add((Object)building);
+        }
+        boolean bl = AutoAttack.regroupEnabled() && Time.time - lastRegroupAt >= (float)AutoAttack.regroupSec() * 60.0f;
+        boolean bl2 = bl;
+        if (bl) {
+            lastRegroupAt = Time.time;
+        }
+        for (int i = 0; i < seq.size; ++i) {
+            int n2;
+            Unit unit22;
+            boolean bl3;
+            Unit unit3;
+            int n3;
+            AttackSlot attackSlot = (AttackSlot)seq.get(i);
+            if (!attackSlot.ready()) continue;
+            Seq seq2 = new Seq();
+            for (n3 = 0; n3 < n; ++n3) {
+                Unit unit4 = (Unit)Groups.unit.index(n3);
+                if (unit4 == null || !unit4.isValid() || unit4.team != Vars.player.team() || claimed.contains(unit4.id) || UnitCoord.holder(unit4.id) == 2 || UnitCoord.holder(unit4.id) == 3 || AutoUnitHeal.isActiveHealer(unit4.id) || AutoUnitHeal.isHealerType(unit4.type) || !attackSlot.unit.equals(unit4.type.name) || !(unit4.controller() instanceof CommandAI)) continue;
+                seq2.add((Object)unit4);
+            }
+            if (attackSlot.maxUnits > 0 && seq2.size > attackSlot.maxUnits) {
+                seq2.truncate(attackSlot.maxUnits);
+            }
+            if (seq2.isEmpty()) continue;
+            for (n3 = 0; n3 < seq2.size; ++n3) {
+                claimed.add(((Unit)seq2.get((int)n3)).id);
+                AutoAttack.trackDamage((Unit)seq2.get(n3), f);
+            }
+            int n4 = AutoAttack.fleePercent();
+            if (n4 > 0) {
+                CoreBlock.CoreBuild coreBuild = Vars.player.closestCore();
+                for (int j = seq2.size - 1; j >= 0; --j) {
+                    Vec2 vec2;
+                    unit3 = (Unit)seq2.get(j);
+                    float f2 = unit3.health / Math.max(1.0f, unit3.maxHealth);
+                    bl3 = fleeing.contains(unit3.id);
+                    if (!bl3 && f2 * 100.0f < (float)n4) {
+                        fleeing.add(unit3.id);
+                        fleeStart.put(unit3.id, Time.time);
+                        bl3 = true;
+                    } else if (bl3 && (f2 >= 0.8f || Time.time - fleeStart.get(unit3.id, 0.0f) > 3600.0f)) {
+                        fleeing.remove(unit3.id);
+                        bl3 = false;
+                    }
+                    if (!bl3) continue;
+                    Unit unit5 = unit22 = LunariansSettings.autoAttackHeal ? AutoAttack.nearestHealer(unit3) : null;
+                    if (unit22 != null) {
+                        vec2 = PathSafe.safeNear(unit3, unit22.x, unit22.y, 48.0f);
+                        if (UnitCoord.cmd(unit3, 4, 90.0f, null, null, vec2)) {
+                            ++count;
+                        }
+                    } else if (coreBuild != null && unit3.dst((Position)coreBuild) > 96.0f && UnitCoord.cmd(unit3, 4, 90.0f, null, null, vec2 = PathSafe.safeNear(unit3, coreBuild.x + 32.0f, coreBuild.y + 32.0f, 64.0f))) {
+                        ++count;
+                    }
+                    seq2.remove(j);
+                }
+                if (seq2.isEmpty()) continue;
+            }
+            if (bl) {
+                AutoAttack.regroupSlot((Seq<Unit>)seq2);
+                continue;
+            }
+            float f3 = attackSlot.hasZone() ? (float)(attackSlot.x * 8) + 4.0f : ((Unit)seq2.first()).x;
+            float f4 = attackSlot.hasZone() ? (float)(attackSlot.y * 8) + 4.0f : ((Unit)seq2.first()).y;
+            float f5 = f4;
+            if (!attackSlot.hasZone()) {
+                f3 = 0.0f;
+                f4 = 0.0f;
+                for (int j = 0; j < seq2.size; ++j) {
+                    f3 += ((Unit)seq2.get((int)j)).x;
+                    f4 += ((Unit)seq2.get((int)j)).y;
+                }
+                f3 /= (float)seq2.size;
+                f4 /= (float)seq2.size;
+            }
+            unit3 = new Seq();
+            boolean bl4 = false;
+            for (Unit unit22 : enemyB) {
+                if (attackSlot.hasZone() && Mathf.dst((float)f3, (float)f4, (float)unit22.x, (float)unit22.y) > attackSlot.zoneRadius * 8.0f) continue;
+                unit3.add((Object)unit22);
+                if (!(unit22.block instanceof Turret)) continue;
+                bl4 = true;
+            }
+            bl3 = AutoAttack.smartTargets();
+            unit22 = null;
+            Building building = null;
+            float f6 = Float.MAX_VALUE;
+            float f7 = Float.MAX_VALUE;
+            float f8 = Float.MAX_VALUE;
+            for (int j = 0; j < unit3.size; ++j) {
+                Building building2 = (Building)unit3.get(j);
+                float f9 = 0.0f;
+                for (n2 = 0; n2 < seq2.size; ++n2) {
+                    f9 += ((Unit)seq2.get(n2)).dst((Position)building2);
+                }
+                f9 /= (float)Math.max(1, seq2.size);
+                if (AutoAttack.isCore(building2)) {
+                    if (!(f9 < f6)) continue;
+                    f6 = f9;
+                    unit22 = building2;
+                    continue;
+                }
+                float f10 = f9;
+                if (bl3) {
+                    boolean bl5;
+                    boolean bl6 = bl5 = building2.block instanceof Wall || building2.block.group == BlockGroup.transportation;
+                    if (building2.block instanceof Turret) {
+                        if (f9 < 640.0f) {
+                            f10 -= 240.0f;
+                        }
+                    } else if (building2.block instanceof PowerGenerator) {
+                        f10 -= 96.0f;
+                    } else if (building2.block instanceof UnitFactory || building2.block instanceof GenericCrafter) {
+                        f10 -= 64.0f;
+                    } else if (bl5) {
+                        f10 += bl4 ? 800.0f : 160.0f;
+                    }
+                }
+                if (!(f10 < f7)) continue;
+                f7 = f10;
+                f8 = f9;
+                building = building2;
+            }
+            float f11 = Math.min(f6, f8);
+            if (AutoAttack.formationOn() && !attackSlot.hasZone() && seq2.size > 1 && f11 > 240.0f) {
+                float f12 = 0.0f;
+                for (int j = 0; j < seq2.size; ++j) {
+                    f12 = Math.max(f12, ((Unit)seq2.get(j)).dst(f3, f4));
+                }
+                if (f12 > 144.0f) {
+                    float f13 = gatherSince.get(i, -1.0f);
+                    if (f13 < 0.0f) {
+                        gatherSince.put(i, Time.time);
+                        f13 = Time.time;
+                    }
+                    if (Time.time - f13 < 600.0f) {
+                        AutoAttack.regroupSlot((Seq<Unit>)seq2);
+                        continue;
+                    }
+                } else {
+                    gatherSince.put(i, -1.0f);
+                }
+            }
+            if (AutoAttack.overlayOn()) {
+                if (building != null) {
+                    lines.add((Object)new float[]{f3, f4, building.x, building.y, 0.0f});
+                }
+                if (unit22 != null) {
+                    lines.add((Object)new float[]{f3, f4, unit22.x, unit22.y, 1.0f});
+                }
+                if (attackSlot.hasZone()) {
+                    lines.add((Object)new float[]{(float)(attackSlot.x * 8) + 4.0f, (float)(attackSlot.y * 8) + 4.0f, attackSlot.zoneRadius * 8.0f, 0.0f, 2.0f});
+                }
+            }
+            seq2.sort(unit -> -unit.maxHealth);
+            Unit unit6 = unit22 != null ? AutoAttack.pickCoreBreaker((Seq<Unit>)seq2, (Building)unit22) : null;
+            boolean bl7 = AutoAttack.groupLowDamage((Seq<Unit>)seq2);
+            for (n2 = 0; n2 < seq2.size; ++n2) {
+                Unit unit7 = (Unit)seq2.get(n2);
+                float f14 = AutoAttack.standoffDist(unit7, attackSlot);
+                if (unit22 != null && AutoAttack.isHighDamage(unit7) && !bl7) {
+                    AutoAttack.holdAwayFromCore(unit7, (Building)unit22, f14);
+                    ++count;
+                    continue;
+                }
+                if (unit7 == unit6 && unit22 != null && bl7) {
+                    AutoAttack.commandBuild(unit7, (Building)unit22, f14, true);
+                    ++count;
+                    continue;
+                }
+                if (building != null) {
+                    float f15 = unit7.dst(f3, f4);
+                    float f16 = 40.0f;
+                    if (f15 > 40.0f * 1.35f + 40.0f) {
+                        AutoAttack.ensureMove(unit7);
+                        float f17 = (float)n2 * 360.0f / (float)seq2.size * ((float)Math.PI / 180);
+                        UnitCoord.cmd(unit7, 1, 90.0f, null, null, new Vec2(f3 + Mathf.cos((float)f17) * 18.0f, f4 + Mathf.sin((float)f17) * 18.0f));
+                        ++count;
+                        continue;
+                    }
+                    AutoAttack.commandBuildFormation(unit7, building, f14, AutoAttack.formationOn() ? (float)(n2 == 0 ? 0 : ((n2 & 1) == 1 ? (n2 + 1) / 2 : -n2 / 2)) + (float)(seq2.size - 1) * 0.5f : (float)n2, seq2.size);
+                    ++count;
+                    continue;
+                }
+                if (unit22 == null) continue;
+                AutoAttack.holdAwayFromCore(unit7, (Building)unit22, f14);
+                ++count;
+            }
+        }
+        shown.clear();
+        shown.addAll(lines);
+    }
+
+    private static Unit pickCoreBreaker(Seq<Unit> seq, Building building) {
+        Unit unit = null;
+        float f = Float.MAX_VALUE;
+        for (int i = 0; i < seq.size; ++i) {
+            float f2;
+            Unit unit2 = (Unit)seq.get(i);
+            if (AutoAttack.isHighDamage(unit2) || !((f2 = unit2.dst((Position)building) - unit2.health / Math.max(1.0f, unit2.maxHealth) * 40.0f) < f)) continue;
+            f = f2;
+            unit = unit2;
+        }
+        return unit != null ? unit : (Unit)seq.first();
+    }
+
+    public static boolean smartTargets() {
+        return Core.settings.getBool("lunarians-attack-smart", true);
+    }
+
+    public static boolean formationOn() {
+        return Core.settings.getBool("lunarians-attack-formation", true);
+    }
+
+    public static boolean overlayOn() {
+        return Core.settings.getBool("lunarians-attack-overlay", true);
+    }
+
+    public static int fleePercent() {
+        return Math.max(0, Math.min(90, Core.settings.getInt("lunarians-attack-flee", 0)));
+    }
+
+    private static boolean pt() {
+        return LunariansSettings.language != null && LunariansSettings.language.startsWith("pt");
+    }
+
+    private static String tr(String string, String string2) {
+        return AutoAttack.pt() ? string2 : string;
+    }
+
+    private static void label(String string, String string2, String string3) {
+        try {
+            Core.bundle.getProperties().put((Object)("setting." + string + ".name"), (Object)AutoAttack.tr(string2, string3));
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    private static void profile(int n, int n2, int n3) {
+        Core.settings.put("lunarians-attack-smart", (Object)(n == 1 ? 1 : 0));
+        Core.settings.put("lunarians-attack-flee", (Object)n2);
+        Core.settings.put("lunarians-attack-formation", (Object)(n3 == 1 ? 1 : 0));
+        if (Vars.ui != null) {
+            Vars.ui.showInfoToast(AutoAttack.tr("Profile applied. Reopen this menu to see the values.", "Perfil aplicado. Reabra o menu para ver os valores."), 3.0f);
+        }
+    }
+
+    private static void drawOverlay() {
+        if (!(Vars.state != null && Vars.state.isGame() && LunariansSettings.enableAutoAttack && AutoAttack.overlayOn())) {
+            return;
+        }
+        Draw.z((float)120.0f);
+        for (int i = 0; i < AutoAttack.shown.size; ++i) {
+            float[] fArray = (float[])shown.get(i);
+            if (fArray[4] == 2.0f) {
+                Draw.color((Color)Pal.accent, (float)0.8f);
+                Lines.stroke((float)1.5f);
+                Lines.circle((float)fArray[0], (float)fArray[1], (float)fArray[2]);
+                continue;
+            }
+            Draw.color((Color)(fArray[4] == 1.0f ? Pal.remove : Pal.lightishOrange), (float)0.8f);
+            Lines.stroke((float)1.2f);
+            Lines.line((float)fArray[0], (float)fArray[1], (float)fArray[2], (float)fArray[3]);
+            Lines.circle((float)fArray[2], (float)fArray[3], (float)6.0f);
+        }
+        Draw.reset();
+    }
+
+    public static int count() {
+        return count;
+    }
+
+    static {
+        claimed = new IntSet();
+        lastHp = new IntFloatMap();
+        dpsEst = new IntFloatMap();
+        lastScanTime = -1.0f;
+        fleeing = new IntSet();
+        fleeStart = new IntFloatMap();
+        gatherSince = new IntFloatMap();
+        enemyB = new Seq();
+        lines = new Seq();
+        shown = new Seq();
+    }
 }
+

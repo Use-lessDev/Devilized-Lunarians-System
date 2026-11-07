@@ -1,3 +1,24 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.Core
+ *  arc.func.Boolf
+ *  arc.func.Cons
+ *  arc.graphics.g2d.TextureAtlas$AtlasRegion
+ *  arc.graphics.g2d.TextureRegion
+ *  arc.scene.style.Drawable
+ *  arc.scene.style.TextureRegionDrawable
+ *  arc.scene.ui.ImageButton
+ *  arc.scene.ui.TextField
+ *  arc.scene.ui.layout.Table
+ *  mindustry.Vars
+ *  mindustry.game.Schematics
+ *  mindustry.gen.Icon
+ *  mindustry.ui.Styles
+ *  mindustry.ui.dialogs.BaseDialog
+ *  mindustry.world.Block
+ */
 package lunarians.ui;
 
 import arc.Core;
@@ -14,6 +35,7 @@ import java.util.Iterator;
 import java.util.Objects;
 import lunarians.LunariansI18n;
 import lunarians.data.SlotData;
+import lunarians.ui.SlotButton;
 import mindustry.Vars;
 import mindustry.game.Schematics;
 import mindustry.gen.Icon;
@@ -21,161 +43,166 @@ import mindustry.ui.Styles;
 import mindustry.ui.dialogs.BaseDialog;
 import mindustry.world.Block;
 
-public class SchematicInputDialog extends BaseDialog {
-  private TextField codeField;
-  
-  private ImageButton iconPreview;
-  
-  private String selectedIcon = null;
-  
-  private final SlotButton targetSlot;
-  
-  public SchematicInputDialog(SlotButton paramSlotButton) {
-    super(LunariansI18n.get("configure_slot") + (paramSlotButton.getIndex() + 1));
-    this.targetSlot = paramSlotButton;
-    this.cont.defaults().pad(6.0F);
-    this.cont.add(LunariansI18n.get("schematic_code")).left().row();
-    this
+public class SchematicInputDialog
+extends BaseDialog {
+    private TextField codeField;
+    private ImageButton iconPreview;
+    private String selectedIcon = null;
+    private final SlotButton targetSlot;
 
+    public SchematicInputDialog(SlotButton slotButton) {
+        super(LunariansI18n.get("configure_slot") + (slotButton.getIndex() + 1));
+        this.targetSlot = slotButton;
+        this.cont.defaults().pad(6.0f);
+        this.cont.add((CharSequence)LunariansI18n.get("schematic_code")).left().row();
+        this.codeField = (TextField)this.cont.field("", new Cons(){
 
-
-      
-      .codeField = (TextField)this.cont.field("", new Cons() {
-          public final void get(Object param1Object) {
-            SchematicInputDialog.lam_new$0((String)param1Object);
-          }
-        }).growX().height(40.0F).get();
-    this.codeField.setMessageText(LunariansI18n.get("paste_code"));
-    this.cont.row();
-    this.cont.add(LunariansI18n.get("icon")).left().padTop(12.0F).row();
-    this.cont.table(new Cons() {
-          public final void get(Object param1Object) {
-            SchematicInputDialog.this.lam_new$3((Table)param1Object);
-          }
-        }).left().row();
-    this.buttons.defaults().size(140.0F, 50.0F).pad(4.0F);
-    this.buttons.button(LunariansI18n.get("back"), new Runnable() {
-          public final void run() {
-            SchematicInputDialog.this.hide();
-          }
-        });
-    this.buttons.button(LunariansI18n.get("save"), new Runnable() {
-          public final void run() {
-            SchematicInputDialog.this.save();
-          }
-        });
-    if (paramSlotButton.getData().hasSchematic()) {
-      this.codeField.setText((paramSlotButton.getData()).schematicBase64);
-      if ((paramSlotButton.getData()).iconName != null) {
-        this.selectedIcon = (paramSlotButton.getData()).iconName;
-        updateIconPreview();
-      } 
-    } 
-    closeOnBack();
-  }
-  
-  static void lam_new$0(String paramString) {}
-  
-  static void lam_new$1() {}
-  
-  public void lam_new$3(Table paramTable) {
-    this
-
-
-
-
-      
-      .iconPreview = (ImageButton)paramTable.button((Drawable)Icon.file, Styles.clearNonei, new Runnable() {
-          public final void run() {
-            SchematicInputDialog.lam_new$1();
-          }
-        }).size(48.0F).get();
-    this.iconPreview.setDisabled(true);
-    paramTable.button(LunariansI18n.get("choose_icon"), new Runnable() {
-          public final void run() {
-            SchematicInputDialog.this.lam_new$2();
-          }
-        }).size(160.0F, 48.0F).padLeft(8.0F);
-  }
-  
-  public void lam_new$2() {
-    final BaseDialog baseDialog = new BaseDialog(LunariansI18n.get("choose_icon_title"));
-    baseDialog.cont.pane(new Cons() {
-          public final void get(Object param1Object) {
-            SchematicInputDialog.this.lam_openIconPicker$6(baseDialog, (Table)param1Object);
-          }
-        }).grow().maxHeight(Core.graphics.getHeight() * 0.6F);
-    Table table = baseDialog.buttons;
-    String str = LunariansI18n.get("back");
-    Objects.requireNonNull(baseDialog);
-    table.button(str, new Runnable() {
-          public final void run() {
-            baseDialog.hide();
-          }
-        }).size(140.0F, 50.0F);
-    baseDialog.closeOnBack();
-    baseDialog.show();
-  }
-  
-  public void lam_openIconPicker$6(final BaseDialog baseDialog, Table paramTable) {
-    paramTable.defaults().size(48.0F).pad(3.0F);
-    Iterator<Block> iterator = Vars.content.blocks().select(new Boolf() {
-          public final boolean get(Object param1Object) {
-            return SchematicInputDialog.lam_openIconPicker$4((Block)param1Object);
-          }
-        }).iterator();
-    byte b = 0;
-    while (iterator.hasNext()) {
-      final Block block = iterator.next();
-      TextureRegion textureRegion = block.uiIcon;
-      if (textureRegion == null || !textureRegion.found())
-        continue; 
-      ((ImageButton)paramTable.button((Drawable)new TextureRegionDrawable(textureRegion), Styles.clearNonei, new Runnable() {
-            public final void run() {
-              SchematicInputDialog.this.lam_openIconPicker$5(block, baseDialog);
+            public final void get(Object object) {
+                SchematicInputDialog.lam_new$0((String)object);
             }
-          }).get()).resizeImage(32.0F);
-      if (++b % 8 != 0)
-        continue; 
-      paramTable.row();
-    } 
-  }
-  
-  static boolean lam_openIconPicker$4(Block paramBlock) {
-    return (paramBlock.isVisible() && paramBlock.synthetic() && !paramBlock.isHidden());
-  }
-  
-  public void lam_openIconPicker$5(Block paramBlock, BaseDialog paramBaseDialog) {
-    this.selectedIcon = paramBlock.name;
-    updateIconPreview();
-    paramBaseDialog.hide();
-  }
-  
-  private void updateIconPreview() {
-    if (this.selectedIcon == null) {
-      (this.iconPreview.getStyle()).imageUp = (Drawable)Icon.file;
-      return;
-    } 
-    Block block = Vars.content.block(this.selectedIcon);
-    TextureAtlas.AtlasRegion atlasRegion;
-    (this.iconPreview.getStyle()).imageUp = (block != null && block.uiIcon != null) ? (Drawable)new TextureRegionDrawable(block.uiIcon) : (((atlasRegion = Core.atlas.find(this.selectedIcon)) != null && atlasRegion.found()) ? (Drawable)new TextureRegionDrawable((TextureRegion)atlasRegion) : (Drawable)Icon.file);
-    this.iconPreview.invalidateHierarchy();
-  }
-  
-  public void save() {
-    String str = this.codeField.getText().trim();
-    if (str.isEmpty()) {
-      Vars.ui.showErrorMessage(LunariansI18n.get("empty_code"));
-      return;
-    } 
-    try {
-      Schematics.readBase64(str);
-      SlotData slotData = new SlotData();
-      slotData.set(str, this.selectedIcon);
-      this.targetSlot.setData(slotData);
-      hide();
-    } catch (Exception exception) {
-      Vars.ui.showErrorMessage(LunariansI18n.get("invalid_schematic"));
-    } 
-  }
+        }).growX().height(40.0f).get();
+        this.codeField.setMessageText(LunariansI18n.get("paste_code"));
+        this.cont.row();
+        this.cont.add((CharSequence)LunariansI18n.get("icon")).left().padTop(12.0f).row();
+        this.cont.table(new Cons(){
+
+            public final void get(Object object) {
+                SchematicInputDialog.this.lam_new$3((Table)object);
+            }
+        }).left().row();
+        this.buttons.defaults().size(140.0f, 50.0f).pad(4.0f);
+        this.buttons.button(LunariansI18n.get("back"), new Runnable(){
+
+            @Override
+            public final void run() {
+                SchematicInputDialog.this.hide();
+            }
+        });
+        this.buttons.button(LunariansI18n.get("save"), new Runnable(){
+
+            @Override
+            public final void run() {
+                SchematicInputDialog.this.save();
+            }
+        });
+        if (slotButton.getData().hasSchematic()) {
+            this.codeField.setText(slotButton.getData().schematicBase64);
+            if (slotButton.getData().iconName != null) {
+                this.selectedIcon = slotButton.getData().iconName;
+                this.updateIconPreview();
+            }
+        }
+        this.closeOnBack();
+    }
+
+    static void lam_new$0(String string) {
+    }
+
+    static void lam_new$1() {
+    }
+
+    public void lam_new$3(Table table) {
+        this.iconPreview = (ImageButton)table.button((Drawable)Icon.file, Styles.clearNonei, new Runnable(){
+
+            @Override
+            public final void run() {
+                SchematicInputDialog.lam_new$1();
+            }
+        }).size(48.0f).get();
+        this.iconPreview.setDisabled(true);
+        table.button(LunariansI18n.get("choose_icon"), new Runnable(){
+
+            @Override
+            public final void run() {
+                SchematicInputDialog.this.lam_new$2();
+            }
+        }).size(160.0f, 48.0f).padLeft(8.0f);
+    }
+
+    public void lam_new$2() {
+        final BaseDialog baseDialog = new BaseDialog(LunariansI18n.get("choose_icon_title"));
+        baseDialog.cont.pane(new Cons(){
+
+            public final void get(Object object) {
+                SchematicInputDialog.this.lam_openIconPicker$6(baseDialog, (Table)object);
+            }
+        }).grow().maxHeight((float)Core.graphics.getHeight() * 0.6f);
+        Table table = baseDialog.buttons;
+        String string = LunariansI18n.get("back");
+        Objects.requireNonNull(baseDialog);
+        table.button(string, new Runnable(){
+
+            @Override
+            public final void run() {
+                baseDialog.hide();
+            }
+        }).size(140.0f, 50.0f);
+        baseDialog.closeOnBack();
+        baseDialog.show();
+    }
+
+    public void lam_openIconPicker$6(final BaseDialog baseDialog, Table table) {
+        table.defaults().size(48.0f).pad(3.0f);
+        Iterator iterator = Vars.content.blocks().select(new Boolf(){
+
+            public final boolean get(Object object) {
+                return SchematicInputDialog.lam_openIconPicker$4((Block)object);
+            }
+        }).iterator();
+        int n = 0;
+        while (iterator.hasNext()) {
+            final Block block = (Block)iterator.next();
+            TextureRegion textureRegion = block.uiIcon;
+            if (textureRegion == null || !textureRegion.found()) continue;
+            ((ImageButton)table.button((Drawable)new TextureRegionDrawable(textureRegion), Styles.clearNonei, new Runnable(){
+
+                @Override
+                public final void run() {
+                    SchematicInputDialog.this.lam_openIconPicker$5(block, baseDialog);
+                }
+            }).get()).resizeImage(32.0f);
+            if (++n % 8 != 0) continue;
+            table.row();
+        }
+    }
+
+    static boolean lam_openIconPicker$4(Block block) {
+        return block.isVisible() && block.synthetic() && !block.isHidden();
+    }
+
+    public void lam_openIconPicker$5(Block block, BaseDialog baseDialog) {
+        this.selectedIcon = block.name;
+        this.updateIconPreview();
+        baseDialog.hide();
+    }
+
+    private void updateIconPreview() {
+        TextureAtlas.AtlasRegion atlasRegion;
+        if (this.selectedIcon == null) {
+            this.iconPreview.getStyle().imageUp = Icon.file;
+            return;
+        }
+        Block block = Vars.content.block(this.selectedIcon);
+        this.iconPreview.getStyle().imageUp = block != null && block.uiIcon != null ? new TextureRegionDrawable(block.uiIcon) : ((atlasRegion = Core.atlas.find(this.selectedIcon)) != null && atlasRegion.found() ? new TextureRegionDrawable((TextureRegion)atlasRegion) : Icon.file);
+        this.iconPreview.invalidateHierarchy();
+    }
+
+    public void save() {
+        String string = this.codeField.getText().trim();
+        if (string.isEmpty()) {
+            Vars.ui.showErrorMessage(LunariansI18n.get("empty_code"));
+            return;
+        }
+        try {
+            Schematics.readBase64((String)string);
+            SlotData slotData = new SlotData();
+            slotData.set(string, this.selectedIcon);
+            this.targetSlot.setData(slotData);
+            this.hide();
+        }
+        catch (Exception exception) {
+            Vars.ui.showErrorMessage(LunariansI18n.get("invalid_schematic"));
+        }
+    }
 }
+

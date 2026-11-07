@@ -1,3 +1,26 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  arc.Core
+ *  arc.Events
+ *  arc.graphics.Color
+ *  arc.graphics.g2d.Draw
+ *  arc.graphics.g2d.Fill
+ *  arc.struct.ObjectFloatMap
+ *  arc.struct.Seq
+ *  arc.util.Log
+ *  arc.util.Time
+ *  mindustry.Vars
+ *  mindustry.game.EventType$PlayerJoin
+ *  mindustry.game.EventType$Trigger
+ *  mindustry.game.EventType$WorldLoadEvent
+ *  mindustry.gen.Call
+ *  mindustry.gen.Groups
+ *  mindustry.gen.Player
+ *  mindustry.gen.Unit
+ *  mindustry.ui.Fonts
+ */
 package lunarians;
 
 import arc.Core;
@@ -18,217 +41,269 @@ import mindustry.gen.Unit;
 import mindustry.ui.Fonts;
 
 public final class LunariansPresence {
-  public static final String PACKET = "lunarians-user";
-  
-  public static final String KEY = "lunarians-presence";
-  
-  private static final float PING_EVERY = 720.0F;
-  
-  private static final float STALE = 1500.0F;
-  
-  private static final Color AURA = Color.valueOf("9b30ff");
-  
-  private static final ObjectFloatMap<String> seen = new ObjectFloatMap();
-  
-  private static float nextPing;
-  
-  private static boolean inited;
-  
-  private static boolean sentThisMap;
-  
-  public static final String MARK = "​⁠‌";
-  
-  public static boolean enabled() {
-    return Core.settings.getBool("lunarians-presence", false);
-  }
-  
-  public static String stripMark(String paramString) {
-    return (paramString == null) ? null : paramString.replace("​⁠‌", "");
-  }
-  
-  public static void applyName() {
-    try {
-      String str1 = stripMark(Core.settings.getString("name", ""));
-      if (str1 == null || str1.isEmpty())
-        return; 
-      String str2 = str1;
-      if (enabled()) {
-        int i = Math.max(1, 40 - "​⁠‌".length());
-        str2 = ((str1.length() > i) ? str1.substring(0, i) : str1) + "​⁠‌";
-      } 
-      Core.settings.put("name", str2);
-      if (Vars.player != null)
-        Vars.player.name = str2; 
-    } catch (Throwable throwable) {
-      Log.err("[Lunarians] presence applyName", throwable);
-    } 
-  }
-  
-  public static void setEnabled(boolean paramBoolean) {
-    Core.settings.put("lunarians-presence", Boolean.valueOf(paramBoolean));
-    applyName();
-    if (paramBoolean) {
-      registerHostRelay();
-      nextPing = 0.0F;
-    } 
-    if (!paramBoolean) {
-      seen.clear();
-      sentThisMap = false;
-      nextPing = 0.0F;
-    } 
-  }
-  
-  public static void init() {
-    if (inited)
-      return; 
-    inited = true;
-    try {
-      if (Vars.netClient != null)
-        Vars.netClient.addPacketHandler("lunarians-user", LunariansPresence::onPacket); 
-    } catch (Throwable throwable) {
-      Log.err("[Lunarians] presence packet handler", throwable);
-    } 
-    try {
-      Events.on(EventType.PlayerJoin.class, paramPlayerJoin -> registerHostRelay());
-      registerHostRelay();
-    } catch (Throwable throwable) {}
-    applyName();
-    Events.run(EventType.Trigger.update, LunariansPresence::update);
-    Events.run(EventType.Trigger.draw, LunariansPresence::draw);
-    Events.on(EventType.WorldLoadEvent.class, paramWorldLoadEvent -> {
-          seen.clear();
-          sentThisMap = false;
-          nextPing = Time.time + 180.0F;
-          applyName();
-          registerHostRelay();
+    public static final String PACKET = "lunarians-user";
+    public static final String KEY = "lunarians-presence";
+    private static final float PING_EVERY = 720.0f;
+    private static final float STALE = 1500.0f;
+    private static final Color AURA = Color.valueOf((String)"9b30ff");
+    private static final ObjectFloatMap<String> seen = new ObjectFloatMap();
+    private static float nextPing;
+    private static boolean inited;
+    private static boolean sentThisMap;
+    public static final String MARK = "\u200b\u2060\u200c";
+
+    private LunariansPresence() {
+    }
+
+    public static boolean enabled() {
+        return Core.settings.getBool(KEY, false);
+    }
+
+    public static String stripMark(String string) {
+        return string == null ? null : string.replace(MARK, "");
+    }
+
+    public static void applyName() {
+        try {
+            String string = LunariansPresence.stripMark(Core.settings.getString("name", ""));
+            if (string == null || string.isEmpty()) {
+                return;
+            }
+            Object object = string;
+            if (LunariansPresence.enabled()) {
+                int n = Math.max(1, 40 - MARK.length());
+                object = (string.length() > n ? string.substring(0, n) : string) + MARK;
+            }
+            Core.settings.put("name", object);
+            if (Vars.player != null) {
+                Vars.player.name = object;
+            }
+        }
+        catch (Throwable throwable) {
+            Log.err((String)"[Lunarians] presence applyName", (Throwable)throwable);
+        }
+    }
+
+    public static void setEnabled(boolean bl) {
+        Core.settings.put(KEY, (Object)bl);
+        LunariansPresence.applyName();
+        if (bl) {
+            LunariansPresence.registerHostRelay();
+            nextPing = 0.0f;
+        }
+        if (!bl) {
+            seen.clear();
+            sentThisMap = false;
+            nextPing = 0.0f;
+        }
+    }
+
+    public static void init() {
+        if (inited) {
+            return;
+        }
+        inited = true;
+        try {
+            if (Vars.netClient != null) {
+                Vars.netClient.addPacketHandler(PACKET, LunariansPresence::onPacket);
+            }
+        }
+        catch (Throwable throwable) {
+            Log.err((String)"[Lunarians] presence packet handler", (Throwable)throwable);
+        }
+        try {
+            Events.on(EventType.PlayerJoin.class, playerJoin -> LunariansPresence.registerHostRelay());
+            LunariansPresence.registerHostRelay();
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        LunariansPresence.applyName();
+        Events.run((Object)EventType.Trigger.update, LunariansPresence::update);
+        Events.run((Object)EventType.Trigger.draw, LunariansPresence::draw);
+        Events.on(EventType.WorldLoadEvent.class, worldLoadEvent -> {
+            seen.clear();
+            sentThisMap = false;
+            nextPing = Time.time + 180.0f;
+            LunariansPresence.applyName();
+            LunariansPresence.registerHostRelay();
         });
-    Log.info("[Lunarians] Presence ready (default OFF).");
-  }
-  
-  private static void registerHostRelay() {
-    if (!enabled())
-      return; 
-    try {
-      if (Vars.netServer == null)
-        return; 
-      Vars.netServer.addPacketHandler("lunarians-user", (paramPlayer, paramString) -> {
-            if (paramPlayer == null || !enabled())
-              return; 
-            String str1 = (paramString == null) ? "" : paramString;
-            String str2 = str1;
-            if (!str1.contains("|"))
-              str1 = "" + paramPlayer.id + "|" + paramPlayer.id + "|" + safe(paramPlayer.name); 
+        Log.info((Object)"[Lunarians] Presence ready (default OFF).");
+    }
+
+    private static void registerHostRelay() {
+        if (!LunariansPresence.enabled()) {
+            return;
+        }
+        try {
+            if (Vars.netServer == null) {
+                return;
+            }
+            Vars.netServer.addPacketHandler(PACKET, (player, string) -> {
+                if (player == null || !LunariansPresence.enabled()) {
+                    return;
+                }
+                Object object = string == null ? "" : string;
+                String string2 = object;
+                if (!((String)object).contains("|")) {
+                    object = player.id + "|" + LunariansPresence.safe(player.name) + "|" + LunariansPresence.safe(player.uuid());
+                }
+                try {
+                    Call.clientPacketReliable((String)PACKET, (String)object);
+                }
+                catch (Throwable throwable) {
+                    try {
+                        Call.clientPacketUnreliable((String)PACKET, (String)object);
+                    }
+                    catch (Throwable throwable2) {
+                        // empty catch block
+                    }
+                }
+            });
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    private static void onPacket(String string) {
+        if (!LunariansPresence.enabled()) {
+            return;
+        }
+        if (string == null || string.isEmpty()) {
+            return;
+        }
+        try {
+            String string2 = string;
+            int n = string.indexOf(124);
+            if (n > 0) {
+                string2 = string.substring(0, n);
+            }
+            if (Vars.player != null && string2.equals(String.valueOf(Vars.player.id))) {
+                return;
+            }
             try {
-              Call.clientPacketReliable("lunarians-user", str1);
-            } catch (Throwable throwable) {
-              try {
-                Call.clientPacketUnreliable("lunarians-user", str1);
-              } catch (Throwable throwable1) {}
-            } 
-          });
-    } catch (Throwable throwable) {}
-  }
-  
-  private static void onPacket(String paramString) {
-    if (!enabled())
-      return; 
-    if (paramString == null || paramString.isEmpty())
-      return; 
-    try {
-      String str = paramString;
-      int i = paramString.indexOf('|');
-      if (i > 0)
-        str = paramString.substring(0, i); 
-      if (Vars.player != null && str.equals(String.valueOf(Vars.player.id)))
-        return; 
-      try {
-        if (Vars.player != null && Vars.player.uuid() != null && paramString.contains(Vars.player.uuid()))
-          return; 
-      } catch (Throwable throwable) {}
-      seen.put(str, Time.time);
-      String[] arrayOfString = paramString.split("\\|");
-      if (arrayOfString.length >= 1 && arrayOfString[0].length() > 0)
-        seen.put(arrayOfString[0], Time.time); 
-      if (arrayOfString.length >= 3 && arrayOfString[2].length() > 2)
-        seen.put(arrayOfString[2], Time.time); 
-    } catch (Throwable throwable) {}
-  }
-  
-  private static void update() {
-    if (!enabled())
-      return; 
-    if (Vars.state == null || !Vars.state.isGame() || Vars.player == null)
-      return; 
-    if (!Vars.net.active())
-      return; 
-    if (Time.time < nextPing)
-      return; 
-    nextPing = Time.time + 720.0F;
-    String str = "" + Vars.player.id + "|" + Vars.player.id + "|" + safe(Vars.player.name);
-    try {
-      Call.serverPacketReliable("lunarians-user", str);
-    } catch (Throwable throwable) {
-      try {
-        Call.serverPacketUnreliable("lunarians-user", str);
-      } catch (Throwable throwable1) {}
-    } 
-    try {
-      if (Vars.netServer != null)
-        Call.clientPacketReliable("lunarians-user", str); 
-    } catch (Throwable throwable) {}
-    sentThisMap = true;
-    Seq seq = new Seq();
-    seen.keys().toSeq().each(paramString -> {
-          if (Time.time - seen.get(paramString, 0.0F) > 1500.0F)
-            paramSeq.add(paramString); 
+                if (Vars.player != null && Vars.player.uuid() != null && string.contains(Vars.player.uuid())) {
+                    return;
+                }
+            }
+            catch (Throwable throwable) {
+                // empty catch block
+            }
+            seen.put((Object)string2, Time.time);
+            String[] stringArray = string.split("\\|");
+            if (stringArray.length >= 1 && stringArray[0].length() > 0) {
+                seen.put((Object)stringArray[0], Time.time);
+            }
+            if (stringArray.length >= 3 && stringArray[2].length() > 2) {
+                seen.put((Object)stringArray[2], Time.time);
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    private static void update() {
+        if (!LunariansPresence.enabled()) {
+            return;
+        }
+        if (Vars.state == null || !Vars.state.isGame() || Vars.player == null) {
+            return;
+        }
+        if (!Vars.net.active()) {
+            return;
+        }
+        if (Time.time < nextPing) {
+            return;
+        }
+        nextPing = Time.time + 720.0f;
+        String string2 = Vars.player.id + "|" + LunariansPresence.safe(Vars.player.name) + "|" + LunariansPresence.safe(Vars.player.uuid());
+        try {
+            Call.serverPacketReliable((String)PACKET, (String)string2);
+        }
+        catch (Throwable throwable) {
+            try {
+                Call.serverPacketUnreliable((String)PACKET, (String)string2);
+            }
+            catch (Throwable throwable2) {
+                // empty catch block
+            }
+        }
+        try {
+            if (Vars.netServer != null) {
+                Call.clientPacketReliable((String)PACKET, (String)string2);
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        sentThisMap = true;
+        Seq seq = new Seq();
+        seen.keys().toSeq().each(string -> {
+            if (Time.time - seen.get(string, 0.0f) > 1500.0f) {
+                seq.add(string);
+            }
         });
-    seq.each(paramObject -> seen.remove(paramObject, 0.0F));
-  }
-  
-  private static boolean isMarked(Player paramPlayer) {
-    if (paramPlayer == null)
-      return false; 
-    if (paramPlayer.name != null && paramPlayer.name.contains("​⁠‌"))
-      return true; 
-    if (seen.containsKey(String.valueOf(paramPlayer.id)))
-      return true; 
-    try {
-      if (paramPlayer.uuid() != null && seen.containsKey(paramPlayer.uuid()))
-        return true; 
-    } catch (Throwable throwable) {}
-    return false;
-  }
-  
-  private static void draw() {
-    if (!enabled())
-      return; 
-    if (Vars.state == null || !Vars.state.isGame() || Vars.player == null)
-      return; 
-    if (!Vars.net.active())
-      return; 
-    float f = Draw.z();
-    for (Player player : Groups.player) {
-      Unit unit;
-      if (player == null || player == Vars.player || !isMarked(player) || (unit = player.unit()) == null || !unit.isValid())
-        continue; 
-      float f1 = Math.max(12.0F, unit.hitSize * 0.9F + 6.0F);
-      Draw.z(109.99F);
-      Draw.color(AURA, 0.18F);
-      Fill.circle(unit.x, unit.y, f1);
-      Draw.color(AURA, 0.1F);
-      Fill.circle(unit.x, unit.y, f1 * 1.35F);
-      Draw.z(120.0F);
-      try {
-        Fonts.outline.draw("Lunarians Team User", unit.x, unit.y + f1 + 6.0F, AURA, 0.22F, false, 1);
-      } catch (Throwable throwable) {}
-    } 
-    Draw.color();
-    Draw.z(f);
-  }
-  
-  private static String safe(String paramString) {
-    if (paramString == null)
-      return ""; 
-    return paramString.replace("|", "").replace("\n", "");
-  }
+        seq.each(object -> seen.remove((Object)((String)object), 0.0f));
+    }
+
+    private static boolean isMarked(Player player) {
+        if (player == null) {
+            return false;
+        }
+        if (player.name != null && player.name.contains(MARK)) {
+            return true;
+        }
+        if (seen.containsKey((Object)String.valueOf(player.id))) {
+            return true;
+        }
+        try {
+            if (player.uuid() != null && seen.containsKey((Object)player.uuid())) {
+                return true;
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        return false;
+    }
+
+    private static void draw() {
+        if (!LunariansPresence.enabled()) {
+            return;
+        }
+        if (Vars.state == null || !Vars.state.isGame() || Vars.player == null) {
+            return;
+        }
+        if (!Vars.net.active()) {
+            return;
+        }
+        float f = Draw.z();
+        for (Player player : Groups.player) {
+            Unit unit;
+            if (player == null || player == Vars.player || !LunariansPresence.isMarked(player) || (unit = player.unit()) == null || !unit.isValid()) continue;
+            float f2 = Math.max(12.0f, unit.hitSize * 0.9f + 6.0f);
+            Draw.z((float)109.99f);
+            Draw.color((Color)AURA, (float)0.18f);
+            Fill.circle((float)unit.x, (float)unit.y, (float)f2);
+            Draw.color((Color)AURA, (float)0.1f);
+            Fill.circle((float)unit.x, (float)unit.y, (float)(f2 * 1.35f));
+            Draw.z((float)120.0f);
+            try {
+                Fonts.outline.draw((CharSequence)"Lunarians Team User", unit.x, unit.y + f2 + 6.0f, AURA, 0.22f, false, 1);
+            }
+            catch (Throwable throwable) {}
+        }
+        Draw.color();
+        Draw.z((float)f);
+    }
+
+    private static String safe(String string) {
+        if (string == null) {
+            return "";
+        }
+        return string.replace("|", "").replace("\n", "");
+    }
 }
+
