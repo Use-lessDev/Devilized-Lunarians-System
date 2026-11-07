@@ -89,4 +89,4 @@ Depois coloque o `mod.json` e `icon.png` no JAR.
 **Gerado automaticamente a partir do JAR em 07/11/2026.**  
 Código decompilado com JADX 1.5.1.
 
-**Atualização:** Novo JAR recebido em 07/11/2026 (tamanho 1.168.635 bytes). Aguardando atualização do binário em `dist/`.
+**Atualização 07/11/2026:** Recebido novo JAR (`Lunarians-v3_78_0-PC-Mobile.jar`, 1.168.635 bytes). `mod.json` atualizado com os dados do novo binário.
