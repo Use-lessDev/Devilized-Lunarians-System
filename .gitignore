@@ -9,3 +9,5 @@ build/
 .gradle/
 *.log
 .DS_Store
+
+.andcode-attachments/
