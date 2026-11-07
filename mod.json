@@ -1,9 +1,8 @@
 {
   "name": "lunarians",
   "displayName": "Lunarians",
-  "author": "gubby",
-  "description": "v3.77.0: chat global, imagens nos chats, features beta por jogador (painel admin).",
-  "version": "3.78.0",
+  "author": "Ron",
+  "description": "Expansion",
   "minGameVersion": "154",
   "hidden": true,
   "java": true,
