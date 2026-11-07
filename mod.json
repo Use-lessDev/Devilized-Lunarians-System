@@ -3,6 +3,7 @@
   "displayName": "Lunarians",
   "author": "Ron",
   "description": "Expansion",
+  "version": "3.78.0",
   "minGameVersion": "154",
   "hidden": true,
   "java": true,
