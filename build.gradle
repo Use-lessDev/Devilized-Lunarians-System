@@ -2,7 +2,7 @@ plugins {
     id 'java'
 }
 
-version = '3.78.0'
+version = '3.78.1'
 
 sourceCompatibility = JavaVersion.VERSION_1_8
 targetCompatibility = JavaVersion.VERSION_1_8
@@ -28,11 +28,16 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-// JAR para PC: classes + mod.json + icon.png na raiz
+// JAR para PC: classes + mod.json + icon.png na raiz + assets/
 jar {
     archiveFileName = "${project.name}Desktop.jar"
-    from(rootDir) { include 'mod.json' }
-    from("$rootDir/assets") { include 'icon.png' }
+    from(rootDir) {
+        include 'mod.json'
+        include 'icon.png'
+    }
+    from("$rootDir/assets") {
+        include '**'
+    }
 }
 
 // JAR hibrido PC + Android: junta os .class com um classes.dex gerado pelo d8
