@@ -28,6 +28,11 @@ import arc.util.Time;
 import arc.Events;
 import mindustry.game.EventType;
 import mindustry.Vars;
+import lunarians.AutoUnitHeal;
+import lunarians.ChatCommands;
+import lunarians.LunariansSettings;
+import lunarians.PathSafe;
+import lunarians.UnitCoord;
 import lunarians.data.AttackSlot;
 import arc.math.Mathf;
 import mindustry.type.UnitType;
@@ -36,6 +41,7 @@ import arc.Core;
 import mindustry.gen.Building;
 import arc.struct.Seq;
 import arc.struct.IntFloatMap;
+import arc.struct.IntIntMap;
 import arc.struct.IntSet;
 
 public class AutoAttack
@@ -55,6 +61,8 @@ public class AutoAttack
     private static final IntSet fleeing;
     private static final IntFloatMap fleeStart;
     private static final IntFloatMap gatherSince;
+    private static final IntIntMap formLayerCount;
+    private static final IntFloatMap formLayerTime;
     private static final Seq<Building> enemyB;
     private static final Seq<float[]> lines;
     private static final Seq<float[]> shown;
@@ -162,6 +170,8 @@ public class AutoAttack
         AutoAttack.enemyB.clear();
         AutoAttack.fleeStart.clear();
         AutoAttack.gatherSince.clear();
+        AutoAttack.formLayerCount.clear();
+        AutoAttack.formLayerTime.clear();
         AutoAttack.lines.clear();
         AutoAttack.shown.clear();
     }
@@ -566,8 +576,35 @@ public class AutoAttack
                                     ++AutoAttack.count;
                                 }
                                 else {
-                                    commandBuildFormation(unit5, building4, standoffDist, formationOn() ? (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f) : ((float)n19), seq.size);
-                                    ++AutoAttack.count;
+                                    // Layer-by-layer auto formation: release layers progressively instead of all at once
+                                    if (formationOn() && seq.size > 1) {
+                                        final int perLayer = 4;
+                                        final int maxLayers = (seq.size + perLayer - 1) / perLayer;
+                                        int released = AutoAttack.formLayerCount.get(i, 1);
+                                        float lastT = AutoAttack.formLayerTime.get(i, -1.0f);
+                                        if (lastT < 0.0f) { AutoAttack.formLayerTime.put(i, Time.time); lastT = Time.time; }
+                                        if (released < maxLayers && Time.time - lastT > 150.0f) {
+                                            released++;
+                                            AutoAttack.formLayerCount.put(i, released);
+                                            AutoAttack.formLayerTime.put(i, Time.time);
+                                        }
+                                        final int layerIdx = n19 / perLayer;
+                                        if (layerIdx < released) {
+                                            commandBuildFormation(unit5, building4, standoffDist, (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f), seq.size);
+                                            ++AutoAttack.count;
+                                        } else {
+                                            // hold back: wait as next layer behind the front, near group anchor
+                                            ensureMove(unit5);
+                                            final float holdAng = building4.angleTo((Position)unit5) * 0.017453292f + (float)Math.PI;
+                                            final float holdR = 20.0f + (layerIdx - released) * 14.0f + (n19 % perLayer) * 6.0f;
+                                            final Vec2 hold = PathSafe.safeNear(unit5, n5 + Mathf.cos(holdAng) * holdR, n7 + Mathf.sin(holdAng) * holdR, 56.0f);
+                                            UnitCoord.cmd(unit5, 1, 90.0f, (Building)null, (Unit)null, hold);
+                                            ++AutoAttack.count;
+                                        }
+                                    } else {
+                                        commandBuildFormation(unit5, building4, standoffDist, formationOn() ? (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f) : ((float)n19), seq.size);
+                                        ++AutoAttack.count;
+                                    }
                                 }
                             }
                             else if (building3 != null) {
@@ -681,6 +718,8 @@ public class AutoAttack
         fleeing = new IntSet();
         fleeStart = new IntFloatMap();
         gatherSince = new IntFloatMap();
+        formLayerCount = new IntIntMap();
+        formLayerTime = new IntFloatMap();
         enemyB = new Seq();
         lines = new Seq();
         shown = new Seq();
