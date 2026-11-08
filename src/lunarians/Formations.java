@@ -84,6 +84,7 @@ public class Formations {
     private static final String K_LAYERS = "lunarians-form-layers";
     private static final String K_FACE = "lunarians-form-face";
     private static final String K_REFORM = "lunarians-form-reform";
+    private static final String K_LAYERBY = "lunarians-form-layer-by-layer";
     private static Object lastGroup = null;
     private static final HashMap<Integer, Vec2[]> curLegs = new HashMap();
     private static final HashMap<Integer, Integer> retries = new HashMap();
@@ -96,6 +97,11 @@ public class Formations {
     private static boolean loopToB = true;
     private static float loopWaitUntil = 0.0f;
     private static float nextLoop = 0.0f;
+    private static boolean layerModeActive = false;
+    private static int currentLayer = 0;
+    private static int totalFormLayers = 0;
+    private static final HashMap<Integer, ArrayList<Integer>> layerUnits = new HashMap();
+    private static float nextLayerCheck = 0.0f;
 
     private static void pump() {
         if (pending.isEmpty()) {
@@ -148,6 +154,56 @@ public class Formations {
         Vec2 vec22 = new Vec2(Mathf.clamp((float)(f + f3 * f5), (float)0.0f, (float)f6), Mathf.clamp((float)(f2 + f4 * f5), (float)0.0f, (float)f7));
         Vec2 vec23 = new Vec2(Mathf.clamp((float)(f - f3 * f8), (float)0.0f, (float)f6), Mathf.clamp((float)(f2 - f4 * f8), (float)0.0f, (float)f7));
         return new Vec2[]{vec22, vec23, vec2};
+    }
+
+
+    private static void layerTick() {
+        if (!layerModeActive) {
+            return;
+        }
+        if (loopActive || Vars.player == null || Vars.state == null || !Vars.state.isGame()) {
+            layerModeActive = false;
+            return;
+        }
+        if (!pending.isEmpty() || Time.time < nextLayerCheck) {
+            return;
+        }
+        nextLayerCheck = Time.time + 20.0f;
+        ArrayList<Integer> ids = layerUnits.get(currentLayer);
+        if (ids == null || ids.isEmpty()) {
+            currentLayer++;
+            if (currentLayer >= totalFormLayers) { layerModeActive = false; return; }
+            ArrayList<Integer> next = layerUnits.get(currentLayer);
+            if (next != null && !next.isEmpty()) Formations.dispatch(next, curLegs, true);
+            return;
+        }
+        boolean allArrived = true;
+        for (Integer id : ids) {
+            Unit unit = (Unit)Groups.unit.getByID(id.intValue());
+            if (unit == null || !unit.isValid() || !(unit.controller() instanceof CommandAI)) continue;
+            CommandAI commandAI = (CommandAI)unit.controller();
+            if (commandAI.targetPos != null) {
+                Vec2[] legs = curLegs.get(id);
+                Vec2 dest = legs != null ? (legs[1] != null ? legs[1] : legs[0]) : null;
+                if (dest != null && unit.dst(dest) > Math.max(12.0f, unit.hitSize * 0.8f)) {
+                    allArrived = false;
+                    break;
+                }
+            }
+        }
+        if (!allArrived) return;
+        currentLayer++;
+        if (currentLayer >= totalFormLayers) {
+            layerModeActive = false;
+            return;
+        }
+        ArrayList<Integer> next = layerUnits.get(currentLayer);
+        if (next != null && !next.isEmpty()) {
+            Formations.dispatch(next, curLegs, true);
+        } else {
+            // skip empty layer
+            nextLayerCheck = 0.0f;
+        }
     }
 
     private static void loopTick() {
@@ -263,6 +319,10 @@ public class Formations {
         return Core.settings.getBool(K_REFORM, false);
     }
 
+    public static boolean layerByLayer() {
+        return Core.settings.getBool(K_LAYERBY, true);
+    }
+
     public static String modeName(int n) {
         boolean bl = LunariansSettings.language != null && LunariansSettings.language.startsWith("pt");
         switch (n) {
@@ -284,6 +344,8 @@ public class Formations {
         Events.on(EventType.WorldLoadEvent.class, worldLoadEvent -> {
             lastGroup = null;
             curLegs.clear();
+            layerModeActive = false;
+            layerUnits.clear();
         });
     }
 
@@ -354,6 +416,7 @@ public class Formations {
 
     private static void update() {
         Formations.pump();
+        Formations.layerTick();
         Formations.loopTick();
         int n = Formations.mode();
         if (n == 0 || Vars.state == null || !Vars.state.isGame() || Vars.player == null || Vars.control == null) {
@@ -368,7 +431,8 @@ public class Formations {
             UnitGroup unitGroup = null;
             Vec2 vec2 = null;
             Seq seq2 = new Seq();
-            for (Unit unit : seq) {
+            for (Object _uo : (Seq)seq) {
+                Unit unit = (Unit)_uo;
                 Vec2 vec22;
                 if (unit == null || !unit.isValid() || !(unit.controller() instanceof CommandAI)) continue;
                 CommandAI commandAI = (CommandAI)unit.controller();
@@ -436,15 +500,20 @@ public class Formations {
         }
         if (n2 == 3) {
             f2 = f7 + (float)Math.PI;
-            arrayList.sort(Comparator.comparingDouble(n -> Mathf.mod((float)(Mathf.atan2((float)fArray[n * 2 + 1], (float)fArray[n * 2]) - f2), (float)((float)Math.PI * 2))));
+            final float ff2a = f2;
+            arrayList.sort(Comparator.comparingDouble((Integer n) -> Mathf.mod((float)(Mathf.atan2((float)fArray[n * 2 + 1], (float)fArray[n * 2]) - ff2a), (float)((float)Math.PI * 2))));
             f = f3;
-            float f12 = f4;
-            arrayList2.sort(Comparator.comparingDouble(unit -> Mathf.mod((float)(Mathf.atan2((float)(unit.y - f12), (float)(unit.x - f)) - f2), (float)((float)Math.PI * 2))));
+            final float ff12 = f4;
+            final float ffa = f;
+            final float ff2b = f2;
+            arrayList2.sort(Comparator.comparingDouble((Unit unit) -> Mathf.mod((float)(Mathf.atan2((float)(unit.y - ff12), (float)(unit.x - ffa)) - ff2b), (float)((float)Math.PI * 2))));
         } else {
-            arrayList.sort(Comparator.comparingDouble(n -> fArray[n * 2] * f10 + fArray[n * 2 + 1] * f11).thenComparingDouble(n -> -(fArray[n * 2] * f8 + fArray[n * 2 + 1] * f9)));
+            final float ff10 = f10, ff11 = f11, ff8 = f8, ff9 = f9;
+            arrayList.sort(Comparator.comparingDouble((Integer n) -> fArray[n * 2] * ff10 + fArray[n * 2 + 1] * ff11).thenComparingDouble((Integer n) -> -(fArray[n * 2] * ff8 + fArray[n * 2 + 1] * ff9)));
             f2 = f3;
             f = f4;
-            arrayList2.sort(Comparator.comparingDouble(unit -> (unit.x - f2) * f10 + (unit.y - f) * f11).thenComparingDouble(unit -> -((unit.x - f2) * f8 + (unit.y - f) * f9)));
+            final float ff2c = f2, ffc = f;
+            arrayList2.sort(Comparator.comparingDouble((Unit unit) -> (unit.x - ff2c) * ff10 + (unit.y - ffc) * ff11).thenComparingDouble((Unit unit) -> -((unit.x - ff2c) * ff8 + (unit.y - ffc) * ff9)));
         }
         int n5 = Formations.center();
         if (n5 == 1) {
@@ -465,6 +534,11 @@ public class Formations {
         loopA.clear();
         loopB.clear();
         reformed = false;
+        layerModeActive = false;
+        layerUnits.clear();
+        currentLayer = 0;
+        totalFormLayers = 1;
+        nextLayerCheck = 0.0f;
         object = Formations.layout(n2, n4, f6, f7 + (float)Math.PI);
         ArrayList<Integer> arrayList3 = new ArrayList<Integer>();
         float f13 = f8;
@@ -474,27 +548,46 @@ public class Formations {
             arrayList4.add(n3);
         }
         arrayList4.sort(Comparator.comparingDouble(n -> -(fArray[(Integer)arrayList.get((int)n) * 2] * f13 + fArray[(Integer)arrayList.get((int)n) * 2 + 1] * f14)));
+        int unitsPerLayer = Math.max(1, Math.min(n4, Formations.perLayer() > 0 ? Formations.perLayer() : (Formations.layers() > 0 ? (n4 + Formations.layers() - 1) / Formations.layers() : (n2 == 1 ? 14 : n4))));
         for (n3 = 0; n3 < n4; ++n3) {
             Unit unit4 = (Unit)arrayList2.get(n3);
             int n8 = (Integer)arrayList.get(n3);
             loopB.put(unit4.id, Formations.makeLeg(unit4, f2 + fArray[n8 * 2], f + fArray[n8 * 2 + 1], f8, f9));
-            loopA.put(unit4.id, Formations.makeLeg(unit4, f3 + object[n8 * 2], f4 + object[n8 * 2 + 1], -f8, -f9));
+            loopA.put(unit4.id, Formations.makeLeg(unit4, f3 + ((float[])object)[n8 * 2], f4 + ((float[])object)[n8 * 2 + 1], -f8, -f9));
         }
         curLegs.putAll(loopB);
+        for (n3 = 0; n3 < unitsPerLayer * 12; ++n3) { layerUnits.put(n3, new ArrayList<Integer>()); }
         Iterator iterator = arrayList4.iterator();
         while (iterator.hasNext()) {
             int n9 = (Integer)iterator.next();
-            arrayList3.add(((Unit)arrayList2.get((int)n9)).id);
+            int uid = ((Unit)arrayList2.get((int)n9)).id;
+            arrayList3.add(uid);
+            int slotIdx = (Integer)arrayList.get(n9);
+            int layerIdx = slotIdx / unitsPerLayer;
+            ArrayList<Integer> lu = layerUnits.get(layerIdx);
+            if (lu == null) { lu = new ArrayList<Integer>(); layerUnits.put(layerIdx, lu); }
+            lu.add(uid);
+            if (layerIdx + 1 > totalFormLayers) totalFormLayers = layerIdx + 1;
         }
-        Formations.dispatch(arrayList3, curLegs, true);
-        loopActive = Formations.loop();
+        boolean doLayerBy = Formations.layerByLayer() && totalFormLayers > 1 && !Formations.loop();
+        if (doLayerBy) {
+            layerModeActive = true;
+            currentLayer = 0;
+            ArrayList<Integer> first = layerUnits.get(0);
+            if (first != null && !first.isEmpty()) Formations.dispatch(first, curLegs, true);
+        } else {
+            Formations.dispatch(arrayList3, curLegs, true);
+        }
+        loopActive = Formations.loop() && !layerModeActive;
         loopToB = true;
         loopWaitUntil = 0.0f;
         nextLoop = Time.time + 60.0f;
         lastGroup = null;
         nextCheck = Time.time + 30.0f;
-        if (Vars.ui != null && !loopActive) {
-            Vars.ui.showInfoToast(Formations.modeName(n2) + " x" + n4 + (n4 > 1 ? " (" + (n4 + Math.max(1, Math.min(n4, Formations.perLayer() > 0 ? Formations.perLayer() : (Formations.layers() > 0 ? (n4 + Formations.layers() - 1) / Formations.layers() : (n2 == 1 ? 14 : n4)))) - 1) / Math.max(1, Math.min(n4, Formations.perLayer() > 0 ? Formations.perLayer() : (Formations.layers() > 0 ? (n4 + Formations.layers() - 1) / Formations.layers() : (n2 == 1 ? 14 : n4)))) + Formations.tr(" layers)", " camadas)") : ""), 1.5f);
+        if (Vars.ui != null) {
+            String msg = Formations.modeName(n2) + " x" + n4 + (totalFormLayers > 1 ? " (" + totalFormLayers + Formations.tr(" layers)", " camadas)") : "");
+            if (doLayerBy) msg = msg + Formations.tr(" layer by layer", " camada por camada");
+            Vars.ui.showInfoToast(msg, 1.8f);
         }
     }
 
@@ -532,29 +625,29 @@ public class Formations {
             curLegs.clear();
             return;
         }
-        Iterator<Map.Entry<Integer, Object>> iterator = arrayList2.iterator();
+        Iterator iterator = arrayList2.iterator();
         while (iterator.hasNext()) {
-            Integer n;
-            retries.put(n, retries.containsKey(n = (Integer)((Object)iterator.next())) ? retries.get(n) + 1 : 1);
+            Integer nid = (Integer)iterator.next();
+            retries.put(nid, retries.containsKey(nid) ? ((Integer)retries.get(nid)) + 1 : 1);
         }
         Formations.dispatch(arrayList2, curLegs, false);
     }
 
     public static void openDialog() {
-        Runnable[] runnableArray;
+        Runnable[] runnableArray = new Runnable[1];
         BaseDialog baseDialog = new BaseDialog(Formations.tr("Formations", "Formacoes"));
         UiStyle.register(baseDialog);
         Table table = new Table();
-        runnableArray = new Runnable[]{() -> {
+        runnableArray[0] = () -> {
             table.clear();
             table.defaults().pad(4.0f);
             table.add((CharSequence)Formations.tr("Select units in command mode, choose a shape and send them to move or attack. The mod sends one position per unit.", "Selecione unidades no modo comando, escolha o formato e mande mover ou atacar. O mod envia uma posicao por unidade.")).color(UiStyle.TEXT_DIM).wrap().width(420.0f).left().row();
             UiStyle.section(table, Formations.tr("Shape", "Formato"));
-            table.table(table -> {
+            table.table(tb -> {
                 int n = 0;
                 while (n <= 3) {
                     int n2 = n++;
-                    table.button(button -> {
+                    tb.button(button -> {
                         button.add((Element)new Preview(n2, 92.0f, 62.0f)).row();
                         button.add((CharSequence)Formations.modeName(n2)).padTop(3.0f);
                     }, (Button.ButtonStyle)Styles.togglet, () -> {
@@ -564,7 +657,7 @@ public class Formations {
                 }
             }).row();
             UiStyle.section(table, Formations.tr("Spacing", "Espacamento"));
-            table.table(table -> {
+            table.table(tb -> {
                 Slider slider = new Slider(1.0f, 8.0f, 0.5f, false);
                 slider.setValue(Formations.spacing());
                 Label label = new Label((CharSequence)(String.format("%.1f", Float.valueOf(Formations.spacing())) + Formations.tr(" blocks", " blocos")));
@@ -572,14 +665,14 @@ public class Formations {
                     Core.settings.put(K_SPACE, (Object)Float.valueOf(f));
                     label.setText((CharSequence)(String.format("%.1f", Float.valueOf(f)) + Formations.tr(" blocks", " blocos")));
                 });
-                table.add((Element)slider).width(240.0f);
-                table.add((Element)label).width(90.0f).padLeft(8.0f);
+                tb.add((Element)slider).width(240.0f);
+                tb.add((Element)label).width(90.0f).padLeft(8.0f);
             }).row();
             table.add((CharSequence)Formations.tr("Never closer than the unit size.", "Nunca fica mais perto que o tamanho da unidade.")).color(UiStyle.TEXT_DIM).fontScale(0.8f).left().row();
             UiStyle.section(table, Formations.tr("Layers", "Camadas"));
             table.add((CharSequence)Formations.tr("Add more layers behind the first one. 0 = automatic.", "Adicione mais camadas atras da primeira. 0 = automatico.")).color(UiStyle.TEXT_DIM).wrap().width(420.0f).left().row();
-            table.table(table -> {
-                table.add((CharSequence)Formations.tr("Layers", "Camadas")).width(110.0f).left();
+            table.table(tb -> {
+                tb.add((CharSequence)Formations.tr("Layers", "Camadas")).width(110.0f).left();
                 Slider slider = new Slider(0.0f, 10.0f, 1.0f, false);
                 slider.setValue((float)Formations.layers());
                 Label label = new Label((CharSequence)(Formations.layers() == 0 ? Formations.tr("Auto", "Auto") : String.valueOf(Formations.layers())));
@@ -587,11 +680,11 @@ public class Formations {
                     Core.settings.put(K_LAYERS, (Object)((int)f));
                     label.setText((CharSequence)((int)f == 0 ? Formations.tr("Auto", "Auto") : String.valueOf((int)f)));
                 });
-                table.add((Element)slider).width(200.0f);
-                table.add((Element)label).width(60.0f).padLeft(8.0f);
+                tb.add((Element)slider).width(200.0f);
+                tb.add((Element)label).width(60.0f).padLeft(8.0f);
             }).row();
-            table.table(table -> {
-                table.add((CharSequence)Formations.tr("Units per layer", "Unidades por camada")).width(110.0f).left().wrap();
+            table.table(tb -> {
+                tb.add((CharSequence)Formations.tr("Units per layer", "Unidades por camada")).width(110.0f).left().wrap();
                 Slider slider = new Slider(0.0f, 50.0f, 1.0f, false);
                 slider.setValue((float)Formations.perLayer());
                 Label label = new Label((CharSequence)(Formations.perLayer() == 0 ? Formations.tr("Auto", "Auto") : String.valueOf(Formations.perLayer())));
@@ -599,13 +692,14 @@ public class Formations {
                     Core.settings.put(K_PER, (Object)((int)f));
                     label.setText((CharSequence)((int)f == 0 ? Formations.tr("Auto", "Auto") : String.valueOf((int)f)));
                 });
-                table.add((Element)slider).width(200.0f);
-                table.add((Element)label).width(60.0f).padLeft(8.0f);
+                tb.add((Element)slider).width(200.0f);
+                tb.add((Element)label).width(60.0f).padLeft(8.0f);
             }).row();
             UiStyle.section(table, Formations.tr("Gradual and loop", "Gradual e loop"));
-            table.table(table -> table.check(Formations.tr("Gradual (send units one by one, front first)", "Gradual (envia as unidades uma a uma, frente primeiro)"), Formations.gradual(), bl -> Core.settings.put(K_GRAD, (Object)bl)).left()).left().row();
-            table.table(table -> {
-                table.add((CharSequence)Formations.tr("Delay between units", "Intervalo entre unidades")).width(110.0f).left().wrap();
+            table.table(t -> t.check(Formations.tr("Layer by layer (deploy one layer at a time)", "Camada por camada (envia uma camada por vez)"), Formations.layerByLayer(), bl -> Core.settings.put(K_LAYERBY, (Object)bl)).left().wrap()).left().row();
+            table.table(tb -> tb.check(Formations.tr("Gradual (send units one by one, front first)", "Gradual (envia as unidades uma a uma, frente primeiro)"), Formations.gradual(), bl -> Core.settings.put(K_GRAD, (Object)bl)).left()).left().row();
+            table.table(tb -> {
+                tb.add((CharSequence)Formations.tr("Delay between units", "Intervalo entre unidades")).width(110.0f).left().wrap();
                 Slider slider = new Slider(0.1f, 3.0f, 0.1f, false);
                 slider.setValue(Formations.gradualDelay());
                 Label label = new Label((CharSequence)String.format("%.1fs", Float.valueOf(Formations.gradualDelay())));
@@ -613,17 +707,17 @@ public class Formations {
                     Core.settings.put(K_GDELAY, (Object)Float.valueOf(f));
                     label.setText((CharSequence)String.format("%.1fs", Float.valueOf(f)));
                 });
-                table.add((Element)slider).width(200.0f);
-                table.add((Element)label).width(60.0f).padLeft(8.0f);
+                tb.add((Element)slider).width(200.0f);
+                tb.add((Element)label).width(60.0f).padLeft(8.0f);
             }).row();
-            table.table(table -> table.check(Formations.tr("Loop (go back and forth keeping the formation)", "Loop (vai e volta mantendo a formacao)"), Formations.loop(), bl -> {
+            table.table(tb -> tb.check(Formations.tr("Loop (go back and forth keeping the formation)", "Loop (vai e volta mantendo a formacao)"), Formations.loop(), bl -> {
                 Core.settings.put(K_LOOP, (Object)bl);
                 if (!bl) {
                     loopActive = false;
                 }
             }).left()).left().row();
-            table.table(table -> {
-                table.add((CharSequence)Formations.tr("Wait at each end", "Espera em cada ponta")).width(110.0f).left().wrap();
+            table.table(tb -> {
+                tb.add((CharSequence)Formations.tr("Wait at each end", "Espera em cada ponta")).width(110.0f).left().wrap();
                 Slider slider = new Slider(0.0f, 10.0f, 0.5f, false);
                 slider.setValue(Formations.loopWait());
                 Label label = new Label((CharSequence)String.format("%.1fs", Float.valueOf(Formations.loopWait())));
@@ -631,29 +725,29 @@ public class Formations {
                     Core.settings.put(K_LWAIT, (Object)Float.valueOf(f));
                     label.setText((CharSequence)String.format("%.1fs", Float.valueOf(f)));
                 });
-                table.add((Element)slider).width(200.0f);
-                table.add((Element)label).width(60.0f).padLeft(8.0f);
+                tb.add((Element)slider).width(200.0f);
+                tb.add((Element)label).width(60.0f).padLeft(8.0f);
             }).row();
             table.add((CharSequence)Formations.tr("Loop stops when you give the units a new command or turn it off.", "O loop para quando voce da um novo comando as unidades ou desliga.")).color(UiStyle.TEXT_DIM).wrap().width(420.0f).left().row();
             UiStyle.section(table, Formations.tr("Center", "Centro"));
-            table.table(table -> {
+            table.table(tb -> {
                 String[] stringArray = new String[]{Formations.tr("Command target", "Alvo do comando"), Formations.tr("First selected", "Primeiro da selecao"), "Camera"};
                 for (int i = 0; i < 3; ++i) {
                     int n = i;
-                    table.button(stringArray[i], Styles.togglet, () -> Core.settings.put(K_CENTER, (Object)n)).checked(textButton -> Formations.center() == n).size(138.0f, 42.0f).pad(2.0f);
+                    tb.button(stringArray[i], Styles.togglet, () -> Core.settings.put(K_CENTER, (Object)n)).checked(textButton -> Formations.center() == n).size(138.0f, 42.0f).pad(2.0f);
                 }
             }).row();
             UiStyle.section(table, Formations.tr("Facing", "Orientacao"));
-            table.table(table -> {
+            table.table(tb -> {
                 String[] stringArray = new String[]{Formations.tr("Toward target / movement", "Para o alvo / movimento"), Formations.tr("Fixed (north)", "Fixa (norte)")};
                 for (int i = 0; i < 2; ++i) {
                     int n = i;
-                    table.button(stringArray[i], Styles.togglet, () -> Core.settings.put(K_FACE, (Object)n)).checked(textButton -> Formations.face() == n).size(210.0f, 42.0f).pad(2.0f);
+                    tb.button(stringArray[i], Styles.togglet, () -> Core.settings.put(K_FACE, (Object)n)).checked(textButton -> Formations.face() == n).size(210.0f, 42.0f).pad(2.0f);
                 }
             }).row();
-            table.table(table -> table.check(Formations.tr("Aligned approach (all units arrive from the same direction)", "Aproximacao alinhada (todas chegam pela mesma direcao)"), Formations.approach(), bl -> Core.settings.put(K_APPR, (Object)bl)).left()).left().row();
-            table.table(table -> table.check(Formations.tr("Reform on stop (re-send slots when they stop out of place)", "Reformar ao parar (reenvia os slots se pararem fora do lugar)"), Formations.reform(), bl -> Core.settings.put(K_REFORM, (Object)bl)).left()).left().row();
-        }};
+            table.table(tb -> tb.check(Formations.tr("Aligned approach (all units arrive from the same direction)", "Aproximacao alinhada (todas chegam pela mesma direcao)"), Formations.approach(), bl -> Core.settings.put(K_APPR, (Object)bl)).left()).left().row();
+            table.table(tb -> tb.check(Formations.tr("Reform on stop (re-send slots when they stop out of place)", "Reformar ao parar (reenvia os slots se pararem fora do lugar)"), Formations.reform(), bl -> Core.settings.put(K_REFORM, (Object)bl)).left()).left().row();
+        };
         runnableArray[0].run();
         baseDialog.cont.pane((Element)table).grow().minWidth(440.0f);
         baseDialog.addCloseButton();
