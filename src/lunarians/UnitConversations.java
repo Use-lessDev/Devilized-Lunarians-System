@@ -12,6 +12,8 @@ import arc.Core;
 import arc.Events;
 import arc.graphics.Color;
 import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Fill;
+import arc.graphics.g2d.Lines;
 import arc.math.Mathf;
 import arc.struct.IntFloatMap;
 import arc.struct.ObjectMap;
@@ -172,8 +174,20 @@ public class UnitConversations {
             if (into < 12f) alpha = into / 12f;
             if (into > LINE_TIME - 12f) alpha = Math.max(0f, (LINE_TIME - into) / 12f);
             Draw.z(Layer.playerName);
-            Color c = tierOf(speaker.type) >= 4 ? Color.valueOf("cfe8ff") : Color.valueOf("fff4c2");
-            Fonts.outline.draw((CharSequence)text, speaker.x, speaker.y + speaker.hitSize / 2f + 10f, c, 0.22f * alpha, false, 1);
+            float cx = speaker.x;
+            float cy = speaker.y + speaker.hitSize / 2f + 12f;
+            float padX = 4f, padY = 2.5f;
+            float bw = Math.max(18f, text.length() * 2.1f + padX * 2f);
+            float bh = 8f + padY * 2f;
+            // square conversation bubble
+            Draw.color(0f, 0f, 0f, 0.55f * alpha);
+            Fill.rect(cx, cy, bw, bh);
+            Color border = tierOf(speaker.type) >= 4 ? Color.valueOf("cfe8ff") : Color.valueOf("fff4c2");
+            Draw.color(border.r, border.g, border.b, 0.75f * alpha);
+            Lines.stroke(1f);
+            Lines.rect(cx - bw / 2f, cy - bh / 2f, bw, bh);
+            Color c = border;
+            Fonts.outline.draw((CharSequence)text, cx, cy + 1f, c, 0.22f * alpha, false, 1);
             Draw.reset();
         } catch (Throwable ignored) {}
     }
