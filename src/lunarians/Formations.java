@@ -166,16 +166,19 @@ public class Formations {
             layerModeActive = false;
             return;
         }
-        if (!pending.isEmpty() || Time.time < nextLayerCheck) {
+        if (Time.time < nextLayerCheck) {
             return;
         }
-        nextLayerCheck = Time.time + Formations.layerDelay() * 60.0f;
+        nextLayerCheck = 0.0f;
         ArrayList<Integer> ids = layerUnits.get(currentLayer);
         if (ids == null || ids.isEmpty()) {
             currentLayer++;
             if (currentLayer >= totalFormLayers) { layerModeActive = false; return; }
             ArrayList<Integer> next = layerUnits.get(currentLayer);
-            if (next != null && !next.isEmpty()) Formations.dispatch(next, curLegs, true);
+            if (next != null && !next.isEmpty()) {
+                Formations.dispatch(next, curLegs, true);
+                nextLayerCheck = Time.time + Formations.layerDelay() * 60.0f;
+            }
             return;
         }
         boolean allArrived = true;
@@ -192,7 +195,10 @@ public class Formations {
                 }
             }
         }
-        if (!allArrived) return;
+        if (!allArrived) {
+            nextLayerCheck = Time.time + 0.4f;
+            return;
+        }
         currentLayer++;
         if (currentLayer >= totalFormLayers) {
             layerModeActive = false;
@@ -201,8 +207,8 @@ public class Formations {
         ArrayList<Integer> next = layerUnits.get(currentLayer);
         if (next != null && !next.isEmpty()) {
             Formations.dispatch(next, curLegs, true);
+            nextLayerCheck = Time.time + Formations.layerDelay() * 60.0f;
         } else {
-            // skip empty layer
             nextLayerCheck = 0.0f;
         }
     }
@@ -429,39 +435,42 @@ public class Formations {
             break block5;
         }
         if (n == 4) {
-            // Triangle / wedge: rows growing outward
-            int rows = (int)Math.sqrt((double)n2);
+            // Triangle / wedge: front row = 1 unit, widening toward the back
+            int rows = (int)Math.ceil(Math.sqrt((double)n2));
             rows = Math.max(1, Math.min(rows, n2));
             int idx = 0;
-            for (int r = 0; r < rows; ++r) {
-                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+            for (int r = 0; r < rows && idx < n2; ++r) {
+                int inRow = Math.min(n2 - idx, r + 1);
                 for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
                     float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
-                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
-                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                    float dep = (float)r * f;
+                    fArray[idx * 2] = f4 * dep - f3 * off;
+                    fArray[idx * 2 + 1] = f3 * dep + f4 * off;
                 }
             }
             return fArray;
         }
         if (n == 5) {
-            // Diamond: two triangles back-to-back
-            int rows = (int)Math.sqrt((double)n2);
+            // Diamond: front row = 1 unit, widening then narrowing back
+            int rows = (int)Math.ceil(Math.sqrt((double)n2));
             rows = Math.max(1, Math.min(rows, n2));
             int idx = 0;
-            for (int r = 0; r < rows; ++r) {
-                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+            for (int r = 0; r < rows && idx < n2; ++r) {
+                int inRow = Math.min(n2 - idx, r + 1);
                 for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
                     float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
-                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
-                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                    float dep = (float)r * f;
+                    fArray[idx * 2] = f4 * dep - f3 * off;
+                    fArray[idx * 2 + 1] = f3 * dep + f4 * off;
                 }
             }
-            for (int r = rows - 1; r >= 0 && idx < n2; --r) {
-                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+            for (int r = rows - 2; r >= 0 && idx < n2; --r) {
+                int inRow = Math.min(n2 - idx, r + 1);
                 for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
                     float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
-                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
-                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                    float dep = (float)r * f;
+                    fArray[idx * 2] = f4 * dep - f3 * off;
+                    fArray[idx * 2 + 1] = f3 * dep + f4 * off;
                 }
             }
             return fArray;
@@ -475,24 +484,24 @@ public class Formations {
                 for (int c = 0; c < side && idx < n2; ++c, ++idx) {
                     float off = ((float)c - (float)(side - 1) / 2.0f) * f;
                     float dep = ((float)r - (float)(side - 1) / 2.0f) * f;
-                    fArray[idx * 2] = f5 * off - f4 * dep;
-                    fArray[idx * 2 + 1] = f6 * off - f3 * dep;
+                    fArray[idx * 2] = f4 * dep - f3 * off;
+                    fArray[idx * 2 + 1] = f3 * dep + f4 * off;
                 }
             }
             return fArray;
         }
         if (n == 7) {
-            // V / chevron: opening toward the target
-            int rows = (int)Math.sqrt((double)n2);
+            // V / chevron: opening toward the target (front row = 1 unit, widening)
+            int rows = (int)Math.ceil(Math.sqrt((double)n2));
             rows = Math.max(1, Math.min(rows, n2));
             int idx = 0;
-            for (int r = 0; r < rows; ++r) {
-                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+            for (int r = 0; r < rows && idx < n2; ++r) {
+                int inRow = Math.min(n2 - idx, r + 1);
                 for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
                     float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
                     float dep = ((float)r * f) * (1.0f - Math.abs(off) / Math.max(0.01f, f * (float)inRow));
-                    fArray[idx * 2] = f5 * off - f4 * dep;
-                    fArray[idx * 2 + 1] = f6 * off - f3 * dep;
+                    fArray[idx * 2] = f4 * dep - f3 * off;
+                    fArray[idx * 2 + 1] = f3 * dep + f4 * off;
                 }
             }
             return fArray;
