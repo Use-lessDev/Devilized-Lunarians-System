@@ -1,0 +1,2 @@
+#!/data/user/0/com.androidharness.app/files/linux/bin/bash
+exec java -jar /storage/emulated/0/Android/data/com.androidharness.app/files/workspace/cfr.jar "$@"

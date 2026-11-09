@@ -1,0 +1,2 @@
+#!/data/user/0/com.androidharness.app/files/linux/bin/bash
+exec java -jar /data/user/0/com.androidharness.app/files/linux/share/java/procyon-decompiler.jar "$@"
