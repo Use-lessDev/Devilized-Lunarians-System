@@ -85,6 +85,7 @@ public class Formations {
     private static final String K_FACE = "lunarians-form-face";
     private static final String K_REFORM = "lunarians-form-reform";
     private static final String K_LAYERBY = "lunarians-form-layer-by-layer";
+    private static final String K_LAYDELAY = "lunarians-form-layer-delay";
     private static Object lastGroup = null;
     private static final HashMap<Integer, Vec2[]> curLegs = new HashMap();
     private static final HashMap<Integer, Integer> retries = new HashMap();
@@ -168,7 +169,7 @@ public class Formations {
         if (!pending.isEmpty() || Time.time < nextLayerCheck) {
             return;
         }
-        nextLayerCheck = Time.time + 20.0f;
+        nextLayerCheck = Time.time + Formations.layerDelay() * 60.0f;
         ArrayList<Integer> ids = layerUnits.get(currentLayer);
         if (ids == null || ids.isEmpty()) {
             currentLayer++;
@@ -323,6 +324,10 @@ public class Formations {
         return Core.settings.getBool(K_LAYERBY, true);
     }
 
+    public static float layerDelay() {
+        return Core.settings.getFloat(K_LAYDELAY, 0.5f);
+    }
+
     public static String modeName(int n) {
         boolean bl = LunariansSettings.language != null && LunariansSettings.language.startsWith("pt");
         switch (n) {
@@ -334,6 +339,18 @@ public class Formations {
             }
             case 3: {
                 return bl ? "Anel" : "Ring";
+            }
+            case 4: {
+                return bl ? "Triangulo" : "Triangle";
+            }
+            case 5: {
+                return bl ? "Losango" : "Diamond";
+            }
+            case 6: {
+                return bl ? "Quadrado" : "Box";
+            }
+            case 7: {
+                return bl ? "V" : "Chevron";
             }
         }
         return bl ? "Desligado" : "Off";
@@ -351,11 +368,10 @@ public class Formations {
 
     public static float[] layout(int n, int n2, float f, float f2) {
         float[] fArray;
+        float f3 = 0f, f4 = 0f, f5 = 0f, f6 = 0f;
         block5: {
             int n3;
             block6: {
-                float f3;
-                float f4;
                 block4: {
                     fArray = new float[n2 * 2];
                     if (n2 <= 0) {
@@ -363,8 +379,8 @@ public class Formations {
                     }
                     f4 = Mathf.cos((float)f2);
                     f3 = Mathf.sin((float)f2);
-                    float f5 = -f3;
-                    float f6 = f4;
+                    f5 = -f3;
+                    f6 = f4;
                     int n4 = Formations.perLayer();
                     int n5 = Formations.layers();
                     n3 = n4 > 0 ? n4 : (n5 > 0 ? (n2 + n5 - 1) / n5 : (n == 1 ? 14 : n2));
@@ -410,6 +426,76 @@ public class Formations {
                 fArray[i * 2] = Mathf.cos((float)f19) * f18;
                 fArray[i * 2 + 1] = Mathf.sin((float)f19) * f18;
             }
+            break block5;
+        }
+        if (n == 4) {
+            // Triangle / wedge: rows growing outward
+            int rows = (int)Math.sqrt((double)n2);
+            rows = Math.max(1, Math.min(rows, n2));
+            int idx = 0;
+            for (int r = 0; r < rows; ++r) {
+                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+                for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
+                    float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
+                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
+                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                }
+            }
+            return fArray;
+        }
+        if (n == 5) {
+            // Diamond: two triangles back-to-back
+            int rows = (int)Math.sqrt((double)n2);
+            rows = Math.max(1, Math.min(rows, n2));
+            int idx = 0;
+            for (int r = 0; r < rows; ++r) {
+                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+                for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
+                    float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
+                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
+                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                }
+            }
+            for (int r = rows - 1; r >= 0 && idx < n2; --r) {
+                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+                for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
+                    float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
+                    fArray[idx * 2] = f5 * off - f4 * ((float)r * f);
+                    fArray[idx * 2 + 1] = f6 * off - f3 * ((float)r * f);
+                }
+            }
+            return fArray;
+        }
+        if (n == 6) {
+            // Box / square block
+            int side = (int)Math.sqrt((double)n2);
+            side = Math.max(1, Math.min(side, n2));
+            int idx = 0;
+            for (int r = 0; r < side && idx < n2; ++r) {
+                for (int c = 0; c < side && idx < n2; ++c, ++idx) {
+                    float off = ((float)c - (float)(side - 1) / 2.0f) * f;
+                    float dep = ((float)r - (float)(side - 1) / 2.0f) * f;
+                    fArray[idx * 2] = f5 * off - f4 * dep;
+                    fArray[idx * 2 + 1] = f6 * off - f3 * dep;
+                }
+            }
+            return fArray;
+        }
+        if (n == 7) {
+            // V / chevron: opening toward the target
+            int rows = (int)Math.sqrt((double)n2);
+            rows = Math.max(1, Math.min(rows, n2));
+            int idx = 0;
+            for (int r = 0; r < rows; ++r) {
+                int inRow = Math.min(n2 - idx, (n2 + rows - 1) / rows);
+                for (int c = 0; c < inRow && idx < n2; ++c, ++idx) {
+                    float off = ((float)c - (float)(inRow - 1) / 2.0f) * f;
+                    float dep = ((float)r * f) * (1.0f - Math.abs(off) / Math.max(0.01f, f * (float)inRow));
+                    fArray[idx * 2] = f5 * off - f4 * dep;
+                    fArray[idx * 2 + 1] = f6 * off - f3 * dep;
+                }
+            }
+            return fArray;
         }
         return fArray;
     }
@@ -645,7 +731,7 @@ public class Formations {
             UiStyle.section(table, Formations.tr("Shape", "Formato"));
             table.table(tb -> {
                 int n = 0;
-                while (n <= 3) {
+                while (n <= 7) {
                     int n2 = n++;
                     tb.button(button -> {
                         button.add((Element)new Preview(n2, 92.0f, 62.0f)).row();
@@ -697,6 +783,18 @@ public class Formations {
             }).row();
             UiStyle.section(table, Formations.tr("Gradual and loop", "Gradual e loop"));
             table.table(t -> t.check(Formations.tr("Layer by layer (deploy one layer at a time)", "Camada por camada (envia uma camada por vez)"), Formations.layerByLayer(), bl -> Core.settings.put(K_LAYERBY, (Object)bl)).left().wrap()).left().row();
+            table.table(tb -> {
+                tb.add((CharSequence)Formations.tr("Delay between layers", "Atraso entre camadas")).width(140.0f).left().wrap();
+                Slider slider = new Slider(0.0f, 3.0f, 0.1f, false);
+                slider.setValue(Formations.layerDelay());
+                Label label = new Label((CharSequence)(String.format("%.1fs", Float.valueOf(Formations.layerDelay()))));
+                slider.moved(f -> {
+                    Core.settings.put(K_LAYDELAY, (Object)Float.valueOf(f));
+                    label.setText((CharSequence)(String.format("%.1fs", Float.valueOf(f))));
+                });
+                tb.add((Element)slider).width(160.0f);
+                tb.add((Element)label).width(60.0f).padLeft(8.0f);
+            }).left().wrap().row();
             table.table(tb -> tb.check(Formations.tr("Gradual (send units one by one, front first)", "Gradual (envia as unidades uma a uma, frente primeiro)"), Formations.gradual(), bl -> Core.settings.put(K_GRAD, (Object)bl)).left()).left().row();
             table.table(tb -> {
                 tb.add((CharSequence)Formations.tr("Delay between units", "Intervalo entre unidades")).width(110.0f).left().wrap();
