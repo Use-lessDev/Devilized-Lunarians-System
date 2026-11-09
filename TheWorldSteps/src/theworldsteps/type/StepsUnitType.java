@@ -1,5 +1,7 @@
 package theworldsteps.type;
 
+import arc.Core;
+import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.TextureRegion;
 import arc.util.Time;
 import mindustry.gen.Unit;
@@ -41,7 +43,7 @@ public class StepsUnitType extends UnitType {
 
     /**
      * Pick the correct frame based on whether the unit is moving.
-     * Called from draw() each frame.
+     * Called from drawBody() each frame.
      *
      * @param velocityLen the unit's current velocity magnitude
      * @return the TextureRegion to draw
@@ -62,17 +64,25 @@ public class StepsUnitType extends UnitType {
     }
 
     @Override
-    public void draw(Unit unit) {
-        // Save the original region
-        TextureRegion original = this.region;
+    public void load() {
+        super.load();
+        
+        // If no custom frames provided, use the default region as a single frame
+        if (idleRegions.length == 0 && region != null && region.found()) {
+            idleRegions = new TextureRegion[]{region};
+        }
+        if (walkRegions.length == 0 && region != null && region.found()) {
+            walkRegions = new TextureRegion[]{region};
+        }
+    }
 
-        // Swap in the correct frame based on velocity
-        this.region = getFrame(unit.vel().len());
-
-        // Let the parent class draw everything (outline, cell, weapons, engines, etc.)
-        super.draw(unit);
-
-        // Restore the original region
-        this.region = original;
+    @Override
+    public void drawBody(Unit unit) {
+        float velLen = unit.vel().len();
+        TextureRegion frame = getFrame(velLen);
+        
+        if (frame != null && frame.found()) {
+            Draw.rect(frame, unit.x, unit.y, unit.rotation);
+        }
     }
 }
