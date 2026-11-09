@@ -1,0 +1,10 @@
+{
+  "name": "TheWorldSteps",
+  "displayName": "The World Steps",
+  "author": "Than",
+  "description": "[accent]Animated Steps Units[] - Unit types with frame-based idle/walk animations.\n\n[lightgray]A custom unit type system using separate idle and walk sprite frames, cycling via game time.",
+  "version": "1.0.0",
+  "minGameVersion": "154",
+  "java": true,
+  "main": "theworldsteps.TheWorldStepsMod"
+}
