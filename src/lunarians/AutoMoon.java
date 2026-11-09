@@ -291,11 +291,14 @@ public class AutoMoon {
         }
         for (n = 0; n < seq.size; ++n) {
             unit2 = (Unit)seq.get(n);
-            float f3 = Math.max(24.0f, unit2.type != null ? unit2.type.buildRange : 40.0f) * 0.7f;
-            float f4 = (float)n * 360.0f / (float)Math.max(1, seq.size) * ((float)Math.PI / 180);
-            float f5 = Mathf.cos((float)f4) * Math.min(18.0f, f3 * 0.3f);
-            float f6 = Mathf.sin((float)f4) * Math.min(18.0f, f3 * 0.3f);
-            Call.commandUnits((Player)Vars.player, (int[])new int[]{unit2.id}, null, null, (Vec2)new Vec2(f + f5, f2 + f6), (boolean)false, (boolean)true);
+            // Only move NON-builders; builders already got assistCommand
+            if (unit2.type == null || unit2.type.buildSpeed <= 0.0f) {
+                float f3 = Math.max(24.0f, unit2.type != null ? unit2.type.buildRange : 40.0f) * 0.7f;
+                float f4 = (float)n * 360.0f / (float)Math.max(1, seq.size) * ((float)Math.PI / 180);
+                float f5 = Mathf.cos((float)f4) * Math.min(18.0f, f3 * 0.3f);
+                float f6 = Mathf.sin((float)f4) * Math.min(18.0f, f3 * 0.3f);
+                Call.commandUnits((Player)Vars.player, (int[])new int[]{unit2.id}, null, null, (Vec2)new Vec2(f + f5, f2 + f6), (boolean)false, (boolean)true);
+            }
         }
     }
 
