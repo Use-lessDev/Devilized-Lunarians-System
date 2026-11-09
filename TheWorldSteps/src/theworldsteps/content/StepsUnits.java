@@ -28,6 +28,12 @@ public class StepsUnits {
     }
 
     public static void loadContent() {
+        // Safety: ensure baby exists even if init() wasn't called first
+        if (baby == null) {
+            Log.warn("[TheWorldSteps] baby was null in loadContent, calling init() first");
+            init();
+        }
+
         Log.info("[TheWorldSteps] Loading sprites for baby...");
 
         // Load idle frames: baby-idle.png (single frame for now)
