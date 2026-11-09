@@ -1,12 +1,9 @@
 package theworldsteps.type;
 
-import arc.Core;
 import arc.graphics.g2d.TextureRegion;
 import arc.util.Time;
-import mindustry.content.Items;
+import mindustry.gen.Unit;
 import mindustry.type.UnitType;
-import mindustry.type.Item;
-import mindustry.gen.TeachUnit;
 
 /**
  * StepsUnitType - A custom unit type with frame-based idle/walk animations.
@@ -65,56 +62,17 @@ public class StepsUnitType extends UnitType {
     }
 
     @Override
-    public void draw(TeachUnit unit) {
-        // We override draw to use our frame selection logic
-        // but keep all the standard UnitType drawing (outline, cell, weapons, etc.)
+    public void draw(Unit unit) {
+        // Save the original region
+        TextureRegion original = this.region;
 
-        float velLen = unit.vel().len();
-        TextureRegion frame = getFrame(velLen);
+        // Swap in the correct frame based on velocity
+        this.region = getFrame(unit.vel().len());
 
-        // Draw the selected frame in place of the default region
-        // The rest of the unit (weapons, cell, outline) is drawn by the parent
-        drawBody(unit, frame);
-    }
+        // Let the parent class draw everything (outline, cell, weapons, engines, etc.)
+        super.draw(unit);
 
-    /**
-     * Draw the body of the unit with the given frame.
-     * Override this for custom positioning, scaling, etc.
-     */
-    protected void drawBody(TeachUnit unit, TextureRegion frame) {
-        // Draw the frame at the unit's position
-        // Using the same drawing parameters as the default region would be
-        // drawn, but with our selected frame.
-        float x = unit.x;
-        float y = unit.y;
-        float rotation = unit.rotation;
-        float scale = this.drawSize; // or unit.size scale
-
-        // Draw with outline if enabled
-        if (outline) {
-            // Draw outline variant if available
-            TextureRegion outlineRegion = this.outlineRegion;
-            if (outlineRegion != null && outlineRegion.found()) {
-                drawOutline(x, y, outlineRegion, rotation, scale);
-            }
-        }
-
-        // Draw the main frame
-        Core.atlas.frame(frame).setOrigin(0, 0);
-        drawRegion(x, y, frame, rotation, scale);
-    }
-
-    // Helper to draw outline - simplified version
-    private void drawOutline(float x, float y, TextureRegion region, float rotation, float scale) {
-        // Standard Mindustry outline drawing pattern
-        for (int i = 0; i < 4; i++) {
-            float ox = (i == 0 || i == 1) ? -1 : 1;
-            float oy = (i == 0 || i == 2) ? -1 : 1;
-            Core.atlas.frame(region).draw(
-                x + ox * scale,
-                y + oy * scale,
-                scale
-            );
-        }
+        // Restore the original region
+        this.region = original;
     }
 }

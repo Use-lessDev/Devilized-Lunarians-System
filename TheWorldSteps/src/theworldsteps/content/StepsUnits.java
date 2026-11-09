@@ -3,8 +3,6 @@ package theworldsteps.content;
 import arc.Core;
 import arc.graphics.g2d.TextureRegion;
 import arc.util.Log;
-import mindustry.content.Items;
-import mindustry.type.Item;
 import theworldsteps.type.StepsUnitType;
 
 /**
@@ -21,15 +19,9 @@ public class StepsUnits {
         Log.info("[TheWorldSteps] Registering units...");
 
         baby = new StepsUnitType("baby") {{
-            name = "baby";
             description = "A tiny step-based unit with frame animations.";
-            maxHealth = 100f;
             health = 100f;
-            moveSpeed = 1.2f;
-            buildTime = 60f * 2; // 2 seconds
-            cost = 50;
-            // Default fallback region if no frames loaded
-            // (will be overridden by loaded frames)
+            speed = 1.2f;
         }};
 
         Log.info("[TheWorldSteps] Registered: baby");
@@ -39,11 +31,11 @@ public class StepsUnits {
         Log.info("[TheWorldSteps] Loading sprites for baby...");
 
         // Load idle frames: baby-idle.png (single frame for now)
-        TextureRegion idle0 = Core.atlas.getSprite("units_baby-idle");
+        TextureRegion idle0 = Core.atlas.find("units_baby-idle");
         baby.idleRegions = new TextureRegion[]{idle0};
 
         // Load walk frames: baby-walking-2-x-idle.png (single frame for now)
-        TextureRegion walk0 = Core.atlas.getSprite("units_baby-walking-2-x-idle");
+        TextureRegion walk0 = Core.atlas.find("units_baby-walking-2-x-idle");
         baby.walkRegions = new TextureRegion[]{walk0};
 
         // Set frame intervals (ticks per frame)
