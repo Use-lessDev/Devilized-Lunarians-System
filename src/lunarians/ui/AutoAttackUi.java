@@ -30,6 +30,8 @@ import arc.scene.style.Drawable;
 import arc.scene.style.TextureRegionDrawable;
 import arc.scene.ui.Dialog;
 import arc.scene.ui.ImageButton;
+import arc.scene.ui.Label;
+import arc.scene.ui.Slider;
 import arc.scene.ui.layout.Table;
 import arc.struct.Seq;
 import lunarians.AutoAttack;
@@ -94,7 +96,46 @@ public class AutoAttackUi {
             Core.settings.put("lunarians-attack-smart-path", (Object)bl);
         }).left();
         table.add((Element)table3b).left().padBottom(4.0f).row();
-        table.add((Element)this.list).growX().row();
+        Table table3c = new Table();
+        table3c.check(AutoAttackUi.tr("Enable projectile dodge", "Ativar desvio de projeteis"), AutoAttack.enableAutoDodge(), bl -> {
+            Core.settings.put("lunarians-auto-dodge", (Object)bl);
+        }).left();
+        table.add((Element)table3c).left().padBottom(2.0f).row();
+        Table table3d = new Table();
+        table3d.add(AutoAttackUi.tr("Dodge sensitivity", "Sensibilidade do desvio")).width(120.0f).left().wrap();
+        Slider dodgeSlider = new Slider(0.1f, 3.0f, 0.1f, false);
+        dodgeSlider.setValue(AutoAttack.autoDodgeSensitivity());
+        Label dodgeLabel = new Label(() -> String.format("%.1f", AutoAttack.autoDodgeSensitivity()));
+        dodgeSlider.moved(f -> {
+            Core.settings.put("lunarians-dodge-sensitivity", (Object)Float.valueOf(f));
+            dodgeLabel.setText(String.format("%.1f", f));
+        });
+        table3d.add((Element)dodgeSlider).width(160.0f);
+        table3d.add((Element)dodgeLabel).width(50.0f).padLeft(8.0f);
+        table.add((Element)table3d).left().padBottom(2.0f).row();
+        Table table3e = new Table();
+        table3e.check(AutoAttackUi.tr("Enable focus fire (coordinated target)", "Ativar foco coordenado (alvo compartilhado)"), AutoAttack.enableFocusFire(), bl -> {
+            Core.settings.put("lunarians-focus-fire", (Object)bl);
+        }).left();
+        table.add((Element)table3e).left().padBottom(2.0f).row();
+        Table table3f = new Table();
+        table3f.add(AutoAttackUi.tr("Focus fire range", "Alcance do foco coordenado")).width(120.0f).left().wrap();
+        Slider focusSlider = new Slider(200.0f, 1500.0f, 50.0f, false);
+        focusSlider.setValue(AutoAttack.focusFireRange());
+        Label focusLabel = new Label(() -> String.format("%.0f", AutoAttack.focusFireRange()));
+        focusSlider.moved(f -> {
+            Core.settings.put("lunarians-focus-range", (Object)Float.valueOf(f));
+            focusLabel.setText(String.format("%.0f", f));
+        });
+        table3f.add((Element)focusSlider).width(160.0f);
+        table3f.add((Element)focusLabel).width(60.0f).padLeft(8.0f);
+        table.add((Element)table3f).left().padBottom(2.0f).row();
+        Table table3g = new Table();
+        table3g.check(AutoAttackUi.tr("Debug visual (colored unit squares)", "Visual debug (quadrados coloridos nas unidades)"), AutoAttack.enableDebugVisual(), bl -> {
+            Core.settings.put("lunarians-debug-visual", (Object)bl);
+        }).left();
+        table.add((Element)table3g).left().padBottom(4.0f).row();
+        table.add((Element)table3b).left().padBottom(4.0f).row();
         this.rebuild();
     }
 

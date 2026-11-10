@@ -477,6 +477,43 @@ extends Table {
             }
         }).width(52.0f).height(40.0f).padLeft(4.0f);
         this.panel.add((Element)table8).growX().left().pad(4.0f).row();
+        
+        // AutoAttack section
+        UiStyle.section(this.panel, BetaHud.t("Auto Attack", "Auto Ataque"));
+        Table tableAA = new Table();
+        tableAA.check("pt".equals(LunariansSettings.language) ? "Auto Attack" : "Auto Attack", LunariansSettings.enableAutoAttack, new Boolc(){
+            public void get(boolean bl) {
+                LunariansSettings.enableAutoAttack = bl;
+                LunariansSettings.save();
+            }
+        }).left();
+        this.panel.add((Element)tableAA).growX().left().pad(4.0f).row();
+        
+        Table tableAARetreat = new Table();
+        tableAARetreat.check("pt".equals(LunariansSettings.language) ? "Retreat por tipo" : "Retreat by type", Core.settings.getBool("lunarians-attack-flee", false), bl -> Core.settings.put("lunarians-attack-flee", (Object)bl)).left().wrap().growX();
+        this.panel.add((Element)tableAARetreat).growX().left().pad(4.0f).row();
+        
+        Table tableAADodge = new Table();
+        tableAADodge.check("pt".equals(LunariansSettings.language) ? "Desvio de projeteis" : "Projectile dodge", AutoAttack.enableAutoDodge(), bl -> Core.settings.put("lunarians-auto-dodge", (Object)bl)).left().wrap().growX();
+        this.panel.add((Element)tableAADodge).growX().left().pad(4.0f).row();
+        
+        Table tableAAFocus = new Table();
+        tableAAFocus.check("pt".equals(LunariansSettings.language) ? "Foco coordenado" : "Focus fire", AutoAttack.enableFocusFire(), bl -> Core.settings.put("lunarians-focus-fire", (Object)bl)).left().wrap().growX();
+        this.panel.add((Element)tableAAFocus).growX().left().pad(4.0f).row();
+        
+        Table tableAADebug = new Table();
+        tableAADebug.check("pt".equals(LunariansSettings.language) ? "Debug visual (quadrados)" : "Debug visual (squares)", AutoAttack.enableDebugVisual(), bl -> Core.settings.put("lunarians-debug-visual", (Object)bl)).left().wrap().growX();
+        this.panel.add((Element)tableAADebug).growX().left().pad(4.0f).row();
+        
+        Table tableAABtn = new Table();
+        tableAABtn.button("Auto Attack Settings", new Runnable(){
+            @Override
+            public void run() {
+                AutoAttackUi.make().show();
+            }
+        }).height(36.0f).pad(4.0f);
+        this.panel.add((Element)tableAABtn).growX().left().pad(4.0f).row();
+        
         Table table9 = new Table();
         table9.add((CharSequence)BetaHud.t("Formation", "Forma\u00e7\u00e3o")).color(UiStyle.TEXT_DIM).padRight(8.0f);
         for (int i = 0; i <= 3; ++i) {

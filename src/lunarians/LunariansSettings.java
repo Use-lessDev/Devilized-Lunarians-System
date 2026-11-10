@@ -88,7 +88,27 @@ public class LunariansSettings {
     public static float pvpDelay = 4.5f;
     public static boolean enableAutoAttack = false;
     public static boolean autoAttackHeal = true;
-    public static final int MAX_ATTACK_SLOTS = 10;
+
+        // AutoAttack: Retreat per unit type (% HP)
+        public static float autoAttackRetreatBuilder = 60.0f;
+        public static float autoAttackRetreatHealer = 50.0f;
+        public static float autoAttackRetreatRanged = 40.0f;
+        public static float autoAttackRetreatMelee = 30.0f;
+        public static float autoAttackRetreatTank = 20.0f;
+        public static float autoAttackRetreatAir = 35.0f;
+
+        // AutoAttack: Projectile evasion
+        public static boolean enableAutoDodge = false;
+        public static float autoDodgeSensitivity = 1.0f;
+
+        // AutoAttack: Focus fire coordination
+        public static boolean enableFocusFire = false;
+        public static float focusFireRange = 600.0f;
+
+        // Debug visual
+        public static boolean enableDebugVisual = false;
+
+        public static final int MAX_ATTACK_SLOTS = 10;
     public static final Seq<AttackSlot> attackSlots = new Seq();
     public static float betaWidth = 250.0f;
     public static float betaHeightPct = 50.0f;
@@ -146,7 +166,7 @@ public class LunariansSettings {
             if (string.isEmpty()) continue;
             for (String string2 : string.split(";")) {
                 if (seq.size >= 25) continue block0;
-                seq.add((Object)LossSlot.deserialize(string2));
+                seq.add(LossSlot.deserialize(string2));
             }
         }
         if (!Core.settings.getBool("lunarians-loss-presets-v1", false)) {
@@ -163,7 +183,7 @@ public class LunariansSettings {
         lossSlot.item = string;
         lossSlot.perSec = f;
         lossSlot.delay = f2;
-        seq.add((Object)lossSlot);
+        seq.add(lossSlot);
     }
 
     public static Seq<LossSlot> lossPreset(int n) {
@@ -219,7 +239,7 @@ public class LunariansSettings {
         if (!string.isEmpty()) {
             for (String string2 : string.split(";")) {
                 if (LunariansSettings.unitSlots.size >= 10) break;
-                unitSlots.add((Object)UnitSlot.deserialize(string2));
+                unitSlots.add(UnitSlot.deserialize(string2));
             }
         }
     }
@@ -284,7 +304,7 @@ public class LunariansSettings {
         if (!string2.isEmpty()) {
             for (String stringArray : string2.split(";")) {
                 if (LunariansSettings.unitHealSlots.size >= 8) break;
-                unitHealSlots.add((Object)UnitHealSlot.deserialize(stringArray));
+                unitHealSlots.add(UnitHealSlot.deserialize(stringArray));
             }
         }
         enableAutoMoon = Core.settings.getBool("lunarians-auto-moon", false);
@@ -314,7 +334,7 @@ public class LunariansSettings {
             for (int i = 0; i < n3; ++i) {
                 bl = stringArray[i];
                 if (LunariansSettings.moonSlots.size >= 8) break;
-                moonSlots.add((Object)MoonSlot.deserialize((String)bl));
+                moonSlots.add(MoonSlot.deserialize((String)bl));
             }
         }
         enableAutoCargo = Core.settings.getBool("lunarians-auto-cargo", false);
@@ -331,13 +351,11 @@ public class LunariansSettings {
         cargoSlots.clear();
         String string4 = Core.settings.getString("lunarians-cargo-slots", "");
         if (!string4.isEmpty()) {
-            String[] i = string4.split(";");
-            string7 = i.length;
-            boolean bl2 = false;
-            for (int i2 = 0; i2 < string7; ++i2) {
-                String[] stringArray = i[i2];
+            String[] cargoArray = string4.split(";");
+            for (int i2 = 0; i2 < cargoArray.length; i2++) {
+                String s = cargoArray[i2];
                 if (LunariansSettings.cargoSlots.size >= 10) break;
-                cargoSlots.add((Object)CargoSlot.deserialize((String)stringArray));
+                cargoSlots.add(CargoSlot.deserialize(s));
             }
         }
         enableAutoDefence = Core.settings.getBool("lunarians-auto-defence", false);
@@ -348,7 +366,7 @@ public class LunariansSettings {
             for (int i = 0; i < stringArray.length; i++) {
                 String s = stringArray[i];
                 if (LunariansSettings.defenceSlots.size >= 8) break;
-                defenceSlots.add((Object)DefenceSlot.deserialize(s));
+                defenceSlots.add(DefenceSlot.deserialize(s));
             }
         }
         enableAutoShield = Core.settings.getBool("lunarians-auto-shield", false);
@@ -361,7 +379,7 @@ public class LunariansSettings {
             for (int i = 0; i < n; ++i) {
                 string = stringArray[i];
                 if (LunariansSettings.shieldSlots.size >= 8) break;
-                shieldSlots.add((Object)ShieldSlot.deserialize(string));
+                shieldSlots.add(ShieldSlot.deserialize(string));
             }
         }
         enableAutoHeal = Core.settings.getBool("lunarians-auto-heal", false);
@@ -372,19 +390,39 @@ public class LunariansSettings {
         if (!string8.isEmpty()) {
             for (String string9 : string8.split(";")) {
                 if (LunariansSettings.healSlots.size >= 10) break;
-                healSlots.add((Object)HealSlot.deserialize(string9));
+                healSlots.add(HealSlot.deserialize(string9));
             }
         }
         enableAutoAttack = Core.settings.getBool("lunarians-auto-attack", false);
         pvpMode = Core.settings.getBool("lunarians-balanced-mode", Core.settings.getBool("lunarians-pvp-mode", false));
         pvpDelay = Core.settings.getFloat("lunarians-balanced-delay", Core.settings.getFloat("lunarians-pvp-delay", 4.5f));
         autoAttackHeal = Core.settings.getBool("lunarians-attack-heal", true);
+        
+        // AutoAttack: Retreat per unit type
+        autoAttackRetreatBuilder = Core.settings.getFloat("lunarians-attack-retreat-builder", 60.0f);
+        autoAttackRetreatHealer = Core.settings.getFloat("lunarians-attack-retreat-healer", 50.0f);
+        autoAttackRetreatRanged = Core.settings.getFloat("lunarians-attack-retreat-ranged", 40.0f);
+        autoAttackRetreatMelee = Core.settings.getFloat("lunarians-attack-retreat-melee", 30.0f);
+        autoAttackRetreatTank = Core.settings.getFloat("lunarians-attack-retreat-tank", 20.0f);
+        autoAttackRetreatAir = Core.settings.getFloat("lunarians-attack-retreat-air", 35.0f);
+
+        // AutoAttack: Projectile evasion
+        enableAutoDodge = Core.settings.getBool("lunarians-auto-dodge", false);
+        autoDodgeSensitivity = Core.settings.getFloat("lunarians-dodge-sensitivity", 1.0f);
+
+        // AutoAttack: Focus fire coordination
+        enableFocusFire = Core.settings.getBool("lunarians-focus-fire", false);
+        focusFireRange = Core.settings.getFloat("lunarians-focus-range", 600.0f);
+
+        // Debug visual
+        enableDebugVisual = Core.settings.getBool("lunarians-debug-visual", false);
+
         attackSlots.clear();
         bl = Core.settings.getString("lunarians-attack-slots", "");
         if (!((String)bl).isEmpty()) {
             for (String string10 : ((String)bl).split(";")) {
                 if (LunariansSettings.attackSlots.size >= 10) break;
-                attackSlots.add((Object)AttackSlot.deserialize(string10));
+                attackSlots.add(AttackSlot.deserialize(string10));
             }
         }
         betaWidth = Mathf.clamp((float)Core.settings.getFloat("lunarians-beta-width", 250.0f), (float)180.0f, (float)450.0f);
@@ -490,6 +528,26 @@ public class LunariansSettings {
         Core.settings.put("lunarians-pvp-delay", (Object)Float.valueOf(pvpDelay));
         Core.settings.put("lunarians-balanced-delay", (Object)Float.valueOf(pvpDelay));
         Core.settings.put("lunarians-attack-heal", (Object)autoAttackHeal);
+
+        // AutoAttack: Retreat per unit type
+        Core.settings.put("lunarians-attack-retreat-builder", (Object)Float.valueOf(autoAttackRetreatBuilder));
+        Core.settings.put("lunarians-attack-retreat-healer", (Object)Float.valueOf(autoAttackRetreatHealer));
+        Core.settings.put("lunarians-attack-retreat-ranged", (Object)Float.valueOf(autoAttackRetreatRanged));
+        Core.settings.put("lunarians-attack-retreat-melee", (Object)Float.valueOf(autoAttackRetreatMelee));
+        Core.settings.put("lunarians-attack-retreat-tank", (Object)Float.valueOf(autoAttackRetreatTank));
+        Core.settings.put("lunarians-attack-retreat-air", (Object)Float.valueOf(autoAttackRetreatAir));
+
+        // AutoAttack: Projectile evasion
+        Core.settings.put("lunarians-auto-dodge", (Object)enableAutoDodge);
+        Core.settings.put("lunarians-dodge-sensitivity", (Object)Float.valueOf(autoDodgeSensitivity));
+
+        // AutoAttack: Focus fire coordination
+        Core.settings.put("lunarians-focus-fire", (Object)enableFocusFire);
+        Core.settings.put("lunarians-focus-range", (Object)Float.valueOf(focusFireRange));
+
+        // Debug visual
+        Core.settings.put("lunarians-debug-visual", (Object)enableDebugVisual);
+
         StringBuilder stringBuilder2 = new StringBuilder();
         for (int i = 0; i < LunariansSettings.cargoSlots.size; ++i) {
             if (i > 0) {
@@ -593,6 +651,25 @@ public class LunariansSettings {
         pvpDelay = 4.5f;
         betaWidth = 250.0f;
         betaHeightPct = 50.0f;
+
+        // AutoAttack: Retreat per unit type (% HP)
+        autoAttackRetreatBuilder = 60.0f;
+        autoAttackRetreatHealer = 50.0f;
+        autoAttackRetreatRanged = 40.0f;
+        autoAttackRetreatMelee = 30.0f;
+        autoAttackRetreatTank = 20.0f;
+        autoAttackRetreatAir = 35.0f;
+
+        // AutoAttack: Projectile evasion
+        enableAutoDodge = false;
+        autoDodgeSensitivity = 1.0f;
+
+        // AutoAttack: Focus fire coordination
+        enableFocusFire = false;
+        focusFireRange = 600.0f;
+
+        // Debug visual
+        enableDebugVisual = false;
         unitSlots.clear();
         for (n = 0; n < 4; ++n) {
             LunariansSettings.lossSlots(n).clear();

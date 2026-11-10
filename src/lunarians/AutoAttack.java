@@ -17,6 +17,7 @@ import mindustry.world.meta.BlockGroup;
 import mindustry.world.blocks.defense.Wall;
 import mindustry.world.blocks.defense.turrets.Turret;
 import mindustry.game.Team;
+import mindustry.gen.Bullet;
 import mindustry.gen.Call;
 import mindustry.ai.UnitCommand;
 import mindustry.ai.types.CommandAI;
@@ -38,6 +39,80 @@ import arc.struct.Seq;
 import arc.struct.IntFloatMap;
 import arc.struct.IntIntMap;
 import arc.struct.IntSet;
+import arc.graphics.g2d.Fill;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Lines;
+import mindustry.graphics.Pal;
+import arc.graphics.g2d.Draw;
+import mindustry.ui.Fonts;
+import mindustry.world.blocks.units.UnitFactory;
+import mindustry.world.blocks.power.PowerGenerator;
+import mindustry.world.meta.BlockGroup;
+import mindustry.world.blocks.defense.Wall;
+import mindustry.world.blocks.defense.turrets.Turret;
+import mindustry.game.Team;
+import mindustry.gen.Bullet;
+import mindustry.gen.Call;
+import mindustry.ai.UnitCommand;
+import mindustry.ai.types.CommandAI;
+import mindustry.world.blocks.storage.CoreBlock;
+import arc.math.geom.Position;
+import mindustry.gen.Groups;
+import arc.util.Log;
+import arc.util.Time;
+import arc.Events;
+import mindustry.game.EventType;
+import mindustry.Vars;
+import lunarians.data.AttackSlot;
+import arc.math.Mathf;
+import mindustry.type.UnitType;
+import mindustry.gen.Unit;
+import arc.Core;
+import mindustry.gen.Building;
+import arc.struct.Seq;
+import arc.struct.IntFloatMap;
+import arc.struct.IntIntMap;
+import arc.struct.IntSet;
+import arc.graphics.g2d.Fill;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Lines;
+import mindustry.graphics.Pal;
+import arc.graphics.g2d.Draw;
+import mindustry.ui.Fonts;
+import mindustry.world.blocks.units.UnitFactory;
+import mindustry.world.blocks.power.PowerGenerator;
+import mindustry.world.meta.BlockGroup;
+import mindustry.world.blocks.defense.Wall;
+import mindustry.world.blocks.defense.turrets.Turret;
+import mindustry.game.Team;
+import mindustry.gen.Bullet;
+import mindustry.gen.Call;
+import mindustry.ai.UnitCommand;
+import mindustry.ai.types.CommandAI;
+import mindustry.world.blocks.storage.CoreBlock;
+import arc.math.geom.Position;
+import mindustry.gen.Groups;
+import arc.util.Log;
+import arc.util.Time;
+import arc.Events;
+import mindustry.game.EventType;
+import mindustry.Vars;
+import lunarians.data.AttackSlot;
+import arc.math.Mathf;
+import mindustry.type.UnitType;
+import mindustry.gen.Unit;
+import arc.Core;
+import mindustry.gen.Building;
+import arc.struct.Seq;
+import arc.struct.IntFloatMap;
+import arc.struct.IntIntMap;
+import arc.struct.IntSet;
+import arc.graphics.g2d.Fill;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Lines;
+import mindustry.graphics.Pal;
+import arc.graphics.g2d.Draw;
+import mindustry.ui.Fonts;
 
 public class AutoAttack
 {
@@ -74,6 +149,19 @@ public class AutoAttack
     }
     private static final Seq<TurretData> cachedTurrets = new Seq<>();
     private static int lastTurretScan = -1;
+
+    // Projectile evasion: cached projectile data per scan
+    private static final class ProjectileData {
+        final float x, y, velX, velY, damage, speed;
+        ProjectileData(float x, float y, float velX, float velY, float damage, float speed) {
+            this.x = x; this.y = y; this.velX = velX; this.velY = velY; this.damage = damage; this.speed = speed;
+        }
+    }
+    private static final Seq<ProjectileData> cachedProjectiles = new Seq<>();
+
+    // Focus fire: shared target per attack slot
+    private static final IntIntMap focusTargets = new IntIntMap();
+    private static int lastFocusFrame = -1;
     
     public static int standoffBlocks() {
         return Math.max(1, Math.min(40, Core.settings.getInt("lunarians-attack-standoff-blocks", 3)));
@@ -142,7 +230,7 @@ public class AutoAttack
                     label("lunarians-attack-regroup-sec", "Regroup interval", "Intervalo de reagrupar");
                     label("lunarians-attack-smart", "Smart targets (turrets first)", "Alvos inteligentes (torres primeiro)");
                     label("lunarians-attack-smart-path", "Smart path (fewer turrets, safer route to core)", "Rota inteligente (menos torres, caminho seguro ate o nucleo)");
-                    label("lunarians-attack-flee", "Retreat below HP %", "Recuar abaixo de % de vida");
+                    label("lunarians-attack-flee", "Retreat below HP % (global)", "Recuar abaixo de % de vida (global)");
                     label("lunarians-attack-formation", "Formation + gather before advancing", "Formacao + juntar antes de avancar");
                     label("lunarians-heal-escort", "Healer escort (open lane / shield)", "Escolta do curandeiro (abre caminho / protege)");
                     label("lunarians-attack-overlay", "Show zones and targets on map", "Mostrar zonas e alvos no mapa");
@@ -155,6 +243,32 @@ public class AutoAttack
                     settingsTable.checkPref("lunarians-attack-formation", true);
                     settingsTable.checkPref("lunarians-heal-escort", true);
                     settingsTable.checkPref("lunarians-attack-overlay", true);
+                    settingsTable.row();
+                    label("lunarians-attack-retreat-builder", "Retreat: Builder % HP", "Recuar: Construtor % HP");
+                    label("lunarians-attack-retreat-healer", "Retreat: Healer % HP", "Recuar: Curandeiro % HP");
+                    label("lunarians-attack-retreat-ranged", "Retreat: Ranged % HP", "Recuar: Distancia % HP");
+                    label("lunarians-attack-retreat-melee", "Retreat: Melee % HP", "Recuar: Melee % HP");
+                    label("lunarians-attack-retreat-tank", "Retreat: Tank % HP", "Recuar: Tank % HP");
+                    label("lunarians-attack-retreat-air", "Retreat: Air % HP", "Recuar: Aereo % HP");
+                    settingsTable.sliderPref("lunarians-attack-retreat-builder", 60, 0, 90, 5, i -> i + "%");
+                    settingsTable.sliderPref("lunarians-attack-retreat-healer", 50, 0, 90, 5, i -> i + "%");
+                    settingsTable.sliderPref("lunarians-attack-retreat-ranged", 40, 0, 90, 5, i -> i + "%");
+                    settingsTable.sliderPref("lunarians-attack-retreat-melee", 30, 0, 90, 5, i -> i + "%");
+                    settingsTable.sliderPref("lunarians-attack-retreat-tank", 20, 0, 90, 5, i -> i + "%");
+                    settingsTable.sliderPref("lunarians-attack-retreat-air", 35, 0, 90, 5, i -> i + "%");
+                    settingsTable.row();
+                    label("lunarians-auto-dodge", "Enable projectile dodge", "Ativar desvio de projeteis");
+                    label("lunarians-dodge-sensitivity", "Dodge sensitivity", "Sensibilidade do desvio");
+                    settingsTable.checkPref("lunarians-auto-dodge", false);
+                    settingsTable.sliderPref("lunarians-dodge-sensitivity", 10, 1, 30, 1, i -> String.format("%.1f", i / 10f));
+                    settingsTable.row();
+                    label("lunarians-focus-fire", "Enable focus fire (coordinated)", "Ativar foco coordenado");
+                    label("lunarians-focus-range", "Focus fire range", "Alcance do foco coordenado");
+                    settingsTable.checkPref("lunarians-focus-fire", false);
+                    settingsTable.sliderPref("lunarians-focus-range", 600, 200, 2000, 50, i -> i + "m");
+                    settingsTable.row();
+                    label("lunarians-debug-visual", "Debug visual (colored unit squares)", "Debug visual (quadrados coloridos)");
+                    settingsTable.checkPref("lunarians-debug-visual", false);
                     settingsTable.row();
                     settingsTable.button(tr("Profile: Defend (retreat 40%)", "Perfil: Defender (recua 40%)"), () -> profile(1, 40, 1)).growX().height(40.0f).row();
                     settingsTable.button(tr("Profile: Balanced (retreat 25%)", "Perfil: Equilibrado (recua 25%)"), () -> profile(1, 25, 1)).growX().height(40.0f).row();
@@ -341,21 +455,25 @@ public class AutoAttack
     private static void commandBuild(final Unit unit, final Building building, final float standoff, final boolean coreTarget) {
         ensureMove(unit);
         final Vec2 vec2 = smartApproach(unit, building, standoff, coreTarget, 0f);
-        UnitCoord.cmd(unit, 1, 90.0f, building, (Unit)null, vec2);
+        Vec2 finalVec = getDodgeOffset(unit, vec2);
+        UnitCoord.cmd(unit, 1, 90.0f, building, (Unit)null, finalVec);
     }
 
     private static void holdAwayFromCore(final Unit unit, final Building building, final float n) {
         ensureMove(unit);
         final float max = Math.max(n * 0.95f, coreSafeDist(building));
         final float n2 = building.angleTo((Position)unit) * 0.017453292f;
-        UnitCoord.cmd(unit, 1, 90.0f, (Building)null, (Unit)null, PathSafe.safeNear(unit, building.x + Mathf.cos(n2) * max, building.y + Mathf.sin(n2) * max, 80.0f));
+        Vec2 base = PathSafe.safeNear(unit, building.x + Mathf.cos(n2) * max, building.y + Mathf.sin(n2) * max, 80.0f);
+        Vec2 finalVec = getDodgeOffset(unit, base);
+        UnitCoord.cmd(unit, 1, 90.0f, (Building)null, (Unit)null, finalVec);
     }
 
     private static void commandBuildFormation(final Unit unit, final Building building, final float standoff, final float n2, final int n3) {
         ensureMove(unit);
         final float formationOffset = (n3 <= 1) ? 0.0f : ((n2 - (n3 - 1) * 0.5f) * 0.35f);
         final Vec2 vec2 = smartApproach(unit, building, standoff, isCore(building), formationOffset);
-        UnitCoord.cmd(unit, 1, 90.0f, building, (Unit)null, vec2);
+        Vec2 finalVec = getDodgeOffset(unit, vec2);
+        UnitCoord.cmd(unit, 1, 90.0f, building, (Unit)null, finalVec);
     }
     
     private static void regroupSlot(final Seq<Unit> seq) {
@@ -413,6 +531,13 @@ public class AutoAttack
                 }
             }
         }
+        // Cache projectile data for dodge
+        AutoAttack.cachedProjectiles.clear();
+        for (final Bullet bullet : Groups.bullet) {
+            if (bullet != null && bullet.team() != Vars.player.team()) {
+                AutoAttack.cachedProjectiles.add(new AutoAttack.ProjectileData(bullet.x, bullet.y, bullet.vel.x, bullet.vel.y, bullet.type.damage, bullet.type.speed));
+            }
+        }
         int n2 = 0;
         if (!regroupEnabled() || Time.time - AutoAttack.lastRegroupAt < regroupSec() * 60.0f) {
             n2 = 0;
@@ -441,38 +566,36 @@ public class AutoAttack
                         AutoAttack.claimed.add(((Unit)seq.get(k)).id);
                         trackDamage((Unit)seq.get(k), n);
                     }
-                    final int fleePercent = fleePercent();
-                    if (fleePercent > 0) {
-                        final CoreBlock.CoreBuild closestCore = Vars.player.closestCore();
-                        for (int l = seq.size - 1; l >= 0; --l) {
-                            final Unit unit2 = (Unit)seq.get(l);
-                            final float n4 = unit2.health / Math.max(1.0f, unit2.maxHealth);
-                            int contains = AutoAttack.fleeing.contains(unit2.id) ? 1 : 0;
-                            if (contains == 0 && n4 * 100.0f < fleePercent) {
-                                AutoAttack.fleeing.add(unit2.id);
-                                AutoAttack.fleeStart.put(unit2.id, Time.time);
-                                contains = 1;
-                            }
-                            else if (contains != 0 && (n4 >= 0.8f || Time.time - AutoAttack.fleeStart.get(unit2.id, 0.0f) > 3600.0f)) {
-                                AutoAttack.fleeing.remove(unit2.id);
-                                contains = 0;
-                            }
-                            if (contains != 0) {
-                                final Unit unit3 = LunariansSettings.autoAttackHeal ? nearestHealer(unit2) : null;
-                                if (unit3 != null) {
-                                    if (UnitCoord.cmd(unit2, 4, 90.0f, (Building)null, (Unit)null, PathSafe.safeNear(unit2, unit3.x, unit3.y, 48.0f))) {
-                                        ++AutoAttack.count;
-                                    }
-                                }
-                                else if (closestCore != null && unit2.dst((Position)closestCore) > 96.0f && UnitCoord.cmd(unit2, 4, 90.0f, (Building)null, (Unit)null, PathSafe.safeNear(unit2, ((Building)closestCore).x + 32.0f, ((Building)closestCore).y + 32.0f, 64.0f))) {
+                    final CoreBlock.CoreBuild closestCore = Vars.player.closestCore();
+                    for (int l = seq.size - 1; l >= 0; --l) {
+                        final Unit unit2 = (Unit)seq.get(l);
+                        final float hpPct = unit2.health / Math.max(1.0f, unit2.maxHealth) * 100.0f;
+                        final int unitFleePct = AutoAttack.fleePercent(unit2.type);
+                        int contains = AutoAttack.fleeing.contains(unit2.id) ? 1 : 0;
+                        if (contains == 0 && hpPct < unitFleePct) {
+                            AutoAttack.fleeing.add(unit2.id);
+                            AutoAttack.fleeStart.put(unit2.id, Time.time);
+                            contains = 1;
+                        }
+                        else if (contains != 0 && (hpPct >= 80.0f || Time.time - AutoAttack.fleeStart.get(unit2.id, 0.0f) > 3600.0f)) {
+                            AutoAttack.fleeing.remove(unit2.id);
+                            contains = 0;
+                        }
+                        if (contains != 0) {
+                            final Unit unit3 = LunariansSettings.autoAttackHeal ? nearestHealer(unit2) : null;
+                            if (unit3 != null) {
+                                if (UnitCoord.cmd(unit2, 4, 90.0f, (Building)null, (Unit)null, PathSafe.safeNear(unit2, unit3.x, unit3.y, 48.0f))) {
                                     ++AutoAttack.count;
                                 }
-                                seq.remove(l);
                             }
+                            else if (closestCore != null && unit2.dst((Position)closestCore) > 96.0f && UnitCoord.cmd(unit2, 4, 90.0f, (Building)null, (Unit)null, PathSafe.safeNear(unit2, ((Building)closestCore).x + 32.0f, ((Building)closestCore).y + 32.0f, 64.0f))) {
+                                ++AutoAttack.count;
+                            }
+                            seq.remove(l);
                         }
-                        if (seq.isEmpty()) {
-                            continue;
-                        }
+                    }
+                    if (seq.isEmpty()) {
+                        continue;
                     }
                     if (n3 != 0) {
                         regroupSlot((Seq<Unit>)seq);
@@ -586,6 +709,26 @@ public class AutoAttack
                                 AutoAttack.lines.add(new float[] { attackSlot.x * 8 + 4.0f, attackSlot.y * 8 + 4.0f, attackSlot.zoneRadius * 8.0f, 0.0f, 2.0f });
                             }
                         }
+                        // Focus fire: assign shared target for this slot
+                        int slotFocusTargetId = -1;
+                        if (enableFocusFire() && building4 != null) {
+                            int existing = AutoAttack.focusTargets.get(i, -1);
+                            if (existing >= 0) {
+                                Building existingB = (Building)Groups.build.getByID(existing);
+                                if (existingB != null && existingB.isValid() && existingB.team != Vars.player.team() && existingB.dst(n5, n7) <= focusFireRange()) {
+                                    slotFocusTargetId = existing;
+                                } else {
+                                    AutoAttack.focusTargets.remove(i);
+                                }
+                            }
+                            if (slotFocusTargetId == -1) {
+                                AutoAttack.focusTargets.put(i, building4.id);
+                                slotFocusTargetId = building4.id;
+                            }
+                        } else {
+                            AutoAttack.focusTargets.remove(i);
+                        }
+                        final int focusTargetId = slotFocusTargetId;
                         seq.sort(u -> -((Unit)u).maxHealth);
                         final Unit unit4 = (building3 != null) ? pickCoreBreaker((Seq<Unit>)seq, building3) : null;
                         final boolean groupLowDamage = groupLowDamage((Seq<Unit>)seq);
@@ -601,6 +744,16 @@ public class AutoAttack
                                 ++AutoAttack.count;
                             }
                             else if (building4 != null) {
+                                Building focusTarget = null;
+                                if (focusTargetId >= 0) {
+                                    focusTarget = (Building)Groups.build.getByID(focusTargetId);
+                                    if (focusTarget == null || !focusTarget.isValid() || focusTarget.team == Vars.player.team() || focusTarget.dst(unit5.x, unit5.y) > focusFireRange()) {
+                                        focusTarget = building4; // fallback
+                                    }
+                                } else {
+                                    focusTarget = building4;
+                                }
+                                Building targetBuilding = focusTarget;
                                 if (unit5.dst(n5, n7) > 40.0f * 1.35f + 40.0f) {
                                     ensureMove(unit5);
                                     final float n20 = n19 * 360.0f / seq.size * 0.017453292f;
@@ -622,19 +775,34 @@ public class AutoAttack
                                         }
                                         final int layerIdx = n19 / perLayer;
                                         if (layerIdx < released) {
-                                            commandBuildFormation(unit5, building4, standoffDist, (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f), seq.size);
+                                            Building targetB = building4;
+                                            if (focusTargetId >= 0) {
+                                                Building ft = (Building)Groups.build.getByID(focusTargetId);
+                                                if (ft != null && ft.isValid()) targetB = ft;
+                                            }
+                                            commandBuildFormation(unit5, targetB, standoffDist, (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f), seq.size);
                                             ++AutoAttack.count;
                                         } else {
                                             // hold back: wait as next layer behind the front, near group anchor
                                             ensureMove(unit5);
-                                            final float holdAng = building4.angleTo((Position)unit5) * 0.017453292f + (float)Math.PI;
+                                            Building targetB = building4;
+                                            if (focusTargetId >= 0) {
+                                                Building ft = (Building)Groups.build.getByID(focusTargetId);
+                                                if (ft != null && ft.isValid()) targetB = ft;
+                                            }
+                                            final float holdAng = targetB.angleTo((Position)unit5) * 0.017453292f + (float)Math.PI;
                                             final float holdR = 20.0f + (layerIdx - released) * 14.0f + (n19 % perLayer) * 6.0f;
                                             final Vec2 hold = PathSafe.safeNear(unit5, n5 + Mathf.cos(holdAng) * holdR, n7 + Mathf.sin(holdAng) * holdR, 56.0f);
                                             UnitCoord.cmd(unit5, 1, 90.0f, (Building)null, (Unit)null, hold);
                                             ++AutoAttack.count;
                                         }
                                     } else {
-                                        commandBuildFormation(unit5, building4, standoffDist, formationOn() ? (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f) : ((float)n19), seq.size);
+                                        Building targetB = building4;
+                                        if (focusTargetId >= 0) {
+                                            Building ft = (Building)Groups.build.getByID(focusTargetId);
+                                            if (ft != null && ft.isValid()) targetB = ft;
+                                        }
+                                        commandBuildFormation(unit5, targetB, standoffDist, formationOn() ? (((n19 == 0) ? 0 : (((n19 & 0x1) == 0x1) ? ((n19 + 1) / 2) : (-n19 / 2))) + (seq.size - 1) * 0.5f) : ((float)n19), seq.size);
                                         ++AutoAttack.count;
                                     }
                                 }
@@ -684,12 +852,115 @@ public class AutoAttack
         return Core.settings.getBool("lunarians-attack-smart-path", false);
     }
 
-    public static void setSmartPath(final boolean bl) {
-        Core.settings.put("lunarians-attack-smart-path", (Object)bl);
+    private static Vec2 getDodgeOffset(Unit unit, Vec2 target) {
+        Vec2 dodge = calculateDodgeOffset(unit);
+        if (dodge == null) return target;
+        // Apply dodge offset to target
+        float newX = target.x + dodge.x;
+        float newY = target.y + dodge.y;
+        return new Vec2(newX, newY);
     }
     
     public static int fleePercent() {
         return Math.max(0, Math.min(90, Core.settings.getInt("lunarians-attack-flee", 0)));
+    }
+
+    // Per-type flee percent based on unit category
+    public static int fleePercent(UnitType type) {
+        if (type == null) return fleePercent();
+        String name = type.name.toLowerCase();
+        // Healer types (mend, heal in name)
+        if (name.contains("mend") || name.contains("heal")) return (int)LunariansSettings.autoAttackRetreatHealer;
+        // Builder types (build speed > 0)
+        if (type.buildSpeed > 0) return (int)LunariansSettings.autoAttackRetreatBuilder;
+        // Air units
+        if (type.flying) return (int)LunariansSettings.autoAttackRetreatAir;
+        // Tank types (high health, armor)
+        if (type.health > 3000 && type.armor > 10) return (int)LunariansSettings.autoAttackRetreatTank;
+        // Melee (low range)
+        if (type.maxRange < 120) return (int)LunariansSettings.autoAttackRetreatMelee;
+        // Ranged (default)
+        return (int)LunariansSettings.autoAttackRetreatRanged;
+    }
+
+    public static boolean enableAutoDodge() {
+        return LunariansSettings.enableAutoDodge;
+    }
+
+    public static float autoDodgeSensitivity() {
+        return LunariansSettings.autoDodgeSensitivity / 10f;
+    }
+
+    public static boolean enableFocusFire() {
+        return LunariansSettings.enableFocusFire;
+    }
+
+    public static float focusFireRange() {
+        return LunariansSettings.focusFireRange;
+    }
+
+    public static boolean enableDebugVisual() {
+        return LunariansSettings.enableDebugVisual;
+    }
+
+    // Projectile evasion: calculate dodge offset for a unit
+    private static Vec2 calculateDodgeOffset(Unit unit) {
+        if (!enableAutoDodge() || cachedProjectiles.isEmpty()) return null;
+        Vec2 bestOffset = null;
+        float bestScore = Float.MAX_VALUE;
+        float sensitivity = autoDodgeSensitivity();
+        float maxDodgeDist = unit.type.maxRange > 0 ? unit.type.maxRange * 0.5f : 80f;
+        
+        for (int i = 0; i < cachedProjectiles.size; ++i) {
+            ProjectileData proj = cachedProjectiles.get(i);
+            float dx = proj.x - unit.x;
+            float dy = proj.y - unit.y;
+            float dist = Mathf.sqrt(dx * dx + dy * dy);
+            
+            // Only dodge projectiles that are close and heading towards us
+            if (dist > 400f) continue;
+            
+            // Projectile velocity towards unit
+            float projVelX = proj.velX;
+            float projVelY = proj.velY;
+            float projSpeed = proj.speed;
+            if (projSpeed <= 0) continue;
+            
+            // Time to impact
+            float timeToImpact = dist / projSpeed;
+            if (timeToImpact < 0.1f || timeToImpact > 5f) continue;
+            
+            // Predicted impact position
+            float predX = proj.x + projVelX * timeToImpact;
+            float predY = proj.y + projVelY * timeToImpact;
+            float predDist = Mathf.dst(unit.x, unit.y, predX, predY);
+            
+            if (predDist < unit.hitSize * 2f) {
+                // Need to dodge perpendicular to projectile velocity
+                float perpX = -projVelY;
+                float perpY = projVelX;
+                float perpLen = Mathf.sqrt(perpX * perpX + perpY * perpY);
+                if (perpLen > 0) {
+                    perpX /= perpLen;
+                    perpY /= perpLen;
+                    
+                    // Choose direction away from projectile
+                    float dot = (unit.x - proj.x) * perpX + (unit.y - proj.y) * perpY;
+                    if (dot < 0) { perpX = -perpX; perpY = -perpY; }
+                    
+                    float dodgeDist = Math.min(maxDodgeDist, 60f * sensitivity);
+                    Vec2 offset = new Vec2(perpX * dodgeDist, perpY * dodgeDist);
+                    
+                    // Score: prefer dodges that move away from projectile
+                    float score = -Mathf.dst(unit.x + offset.x, unit.y + offset.y, proj.x, proj.y);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestOffset = offset;
+                    }
+                }
+            }
+        }
+        return bestOffset;
     }
     
     private static boolean pt() {
@@ -735,7 +1006,62 @@ public class AutoAttack
                 Lines.circle(array[2], array[3], 6.0f);
             }
         }
+        // Debug visual: colored squares for units based on their module
+        if (enableDebugVisual()) {
+            drawDebugUnitSquares();
+        }
         Draw.reset();
+    }
+
+    private static void drawDebugUnitSquares() {
+        try {
+            int size = Groups.unit.size();
+            for (int i = 0; i < size; ++i) {
+                Unit unit = (Unit)Groups.unit.index(i);
+                if (unit == null || !unit.isValid() || unit.team != Vars.player.team() || unit.controller() instanceof CommandAI == false) continue;
+                
+                CommandAI ai = (CommandAI)unit.controller();
+                arc.graphics.Color color = null;
+                String label = "";
+                
+                // Determine module based on command - use string comparison since enum constants may vary
+                String cmdName = ai.command.toString().toLowerCase();
+                if (cmdName.contains("attack")) {
+                    color = arc.graphics.Color.red;
+                    label = "ATTACK";
+                } else if (cmdName.contains("move")) {
+                    // Check if it's a formation move (has targetPos but no attack target)
+                    if (ai.targetPos != null && ai.attackTarget == null) {
+                        color = arc.graphics.Color.blue;
+                        label = "MOVE";
+                    } else {
+                        color = arc.graphics.Color.cyan;
+                        label = "FORMATION";
+                    }
+                } else if (cmdName.contains("repair")) {
+                    color = arc.graphics.Color.green;
+                    label = "HEAL/REPAIR";
+                } else if (cmdName.contains("rally")) {
+                    color = arc.graphics.Color.yellow;
+                    label = "RALLY";
+                } else {
+                    continue; // skip unknown
+                }
+                
+                // Draw transparent square
+                Draw.color(color, 0.4f);
+                float sqSize = unit.hitSize * 1.5f;
+                Fill.square(unit.x, unit.y, sqSize);
+                
+                // Draw border
+                Draw.color(color, 0.8f);
+                Lines.stroke(1.5f);
+                Lines.square(unit.x, unit.y, sqSize);
+                
+                // Draw label
+                Fonts.outline.draw(label, unit.x, unit.y + unit.hitSize + 8f, color, 0.2f, false, 1);
+            }
+        } catch (Throwable ignored) {}
     }
     
     public static int count() {
