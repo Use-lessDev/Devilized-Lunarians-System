@@ -241,6 +241,21 @@ public class AutoAttackUi {
             table.add((CharSequence)(" " + AutoAttackUi.tr("1-" + maxStandoff + " (range " + (int)f + "+2)", "1-" + maxStandoff + " (alcance " + (int)f + "+2)"))).color(Color.lightGray).fontScale(0.7f).padLeft(4.0f);
             table2.add((Element)table).left().padTop(2.0f).row();
         }
+        // Retreat percent per slot
+        Table tableRetreat = new Table();
+        tableRetreat.add((CharSequence)AutoAttackUi.tr("Retreat % HP (0=global)", "Recuar % HP (0=global)")).left().padRight(4.0f).fontScale(0.85f);
+        tableRetreat.button("-", () -> {
+            attackSlot.retreatPercent = Math.max(0, attackSlot.retreatPercent - 5);
+            LunariansSettings.save();
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        tableRetreat.label(() -> attackSlot.retreatPercent <= 0 ? AutoAttackUi.tr("global", "global") : attackSlot.retreatPercent + "%").width(48.0f).center().pad(2.0f);
+        tableRetreat.button("+", () -> {
+            attackSlot.retreatPercent = Math.min(90, attackSlot.retreatPercent + 5);
+            LunariansSettings.save();
+            AutoAttackUi.reopen();
+        }).size(32.0f, 28.0f);
+        table2.add((Element)tableRetreat).left().padTop(2.0f).row();
         final boolean hasZone = attackSlot.hasZone();
         table = new Table();
         table.add((CharSequence)LunariansI18n.get("atk_zone", hasZone ? attackSlot.x + "," + attackSlot.y + " r" + (int)attackSlot.zoneRadius : LunariansI18n.get("atk_whole_map"))).wrap().growX().left().fontScale(0.85f).color(hasZone ? Color.white : Color.lightGray);

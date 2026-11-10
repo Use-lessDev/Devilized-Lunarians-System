@@ -89,14 +89,6 @@ public class LunariansSettings {
     public static boolean enableAutoAttack = false;
     public static boolean autoAttackHeal = true;
 
-        // AutoAttack: Retreat per unit type (% HP)
-        public static float autoAttackRetreatBuilder = 60.0f;
-        public static float autoAttackRetreatHealer = 50.0f;
-        public static float autoAttackRetreatRanged = 40.0f;
-        public static float autoAttackRetreatMelee = 30.0f;
-        public static float autoAttackRetreatTank = 20.0f;
-        public static float autoAttackRetreatAir = 35.0f;
-
         // AutoAttack: Projectile evasion
         public static boolean enableAutoDodge = false;
         public static float autoDodgeSensitivity = 1.0f;
@@ -397,14 +389,6 @@ public class LunariansSettings {
         pvpMode = Core.settings.getBool("lunarians-balanced-mode", Core.settings.getBool("lunarians-pvp-mode", false));
         pvpDelay = Core.settings.getFloat("lunarians-balanced-delay", Core.settings.getFloat("lunarians-pvp-delay", 4.5f));
         autoAttackHeal = Core.settings.getBool("lunarians-attack-heal", true);
-        
-        // AutoAttack: Retreat per unit type
-        autoAttackRetreatBuilder = Core.settings.getFloat("lunarians-attack-retreat-builder", 60.0f);
-        autoAttackRetreatHealer = Core.settings.getFloat("lunarians-attack-retreat-healer", 50.0f);
-        autoAttackRetreatRanged = Core.settings.getFloat("lunarians-attack-retreat-ranged", 40.0f);
-        autoAttackRetreatMelee = Core.settings.getFloat("lunarians-attack-retreat-melee", 30.0f);
-        autoAttackRetreatTank = Core.settings.getFloat("lunarians-attack-retreat-tank", 20.0f);
-        autoAttackRetreatAir = Core.settings.getFloat("lunarians-attack-retreat-air", 35.0f);
 
         // AutoAttack: Projectile evasion
         enableAutoDodge = Core.settings.getBool("lunarians-auto-dodge", false);
@@ -530,13 +514,6 @@ public class LunariansSettings {
         Core.settings.put("lunarians-attack-heal", (Object)autoAttackHeal);
 
         // AutoAttack: Retreat per unit type
-        Core.settings.put("lunarians-attack-retreat-builder", (Object)Float.valueOf(autoAttackRetreatBuilder));
-        Core.settings.put("lunarians-attack-retreat-healer", (Object)Float.valueOf(autoAttackRetreatHealer));
-        Core.settings.put("lunarians-attack-retreat-ranged", (Object)Float.valueOf(autoAttackRetreatRanged));
-        Core.settings.put("lunarians-attack-retreat-melee", (Object)Float.valueOf(autoAttackRetreatMelee));
-        Core.settings.put("lunarians-attack-retreat-tank", (Object)Float.valueOf(autoAttackRetreatTank));
-        Core.settings.put("lunarians-attack-retreat-air", (Object)Float.valueOf(autoAttackRetreatAir));
-
         // AutoAttack: Projectile evasion
         Core.settings.put("lunarians-auto-dodge", (Object)enableAutoDodge);
         Core.settings.put("lunarians-dodge-sensitivity", (Object)Float.valueOf(autoDodgeSensitivity));
@@ -651,14 +628,6 @@ public class LunariansSettings {
         pvpDelay = 4.5f;
         betaWidth = 250.0f;
         betaHeightPct = 50.0f;
-
-        // AutoAttack: Retreat per unit type (% HP)
-        autoAttackRetreatBuilder = 60.0f;
-        autoAttackRetreatHealer = 50.0f;
-        autoAttackRetreatRanged = 40.0f;
-        autoAttackRetreatMelee = 30.0f;
-        autoAttackRetreatTank = 20.0f;
-        autoAttackRetreatAir = 35.0f;
 
         // AutoAttack: Projectile evasion
         enableAutoDodge = false;

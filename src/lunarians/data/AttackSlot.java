@@ -11,6 +11,7 @@ public class AttackSlot {
     public int y = Integer.MIN_VALUE;
     public float zoneRadius = 0.0f;
     public int standoffTiles = 0;
+    public int retreatPercent = 0;
 
     public boolean ready() {
         return !this.unit.isEmpty();
@@ -28,11 +29,12 @@ public class AttackSlot {
         attackSlot.y = this.y;
         attackSlot.zoneRadius = this.zoneRadius;
         attackSlot.standoffTiles = this.standoffTiles;
+        attackSlot.retreatPercent = this.retreatPercent;
         return attackSlot;
     }
 
     public String serialize() {
-        return this.unit + "|" + this.maxUnits + "|" + this.x + "|" + this.y + "|" + this.zoneRadius + "|" + this.standoffTiles;
+        return this.unit + "|" + this.maxUnits + "|" + this.x + "|" + this.y + "|" + this.zoneRadius + "|" + this.standoffTiles + "|" + this.retreatPercent;
     }
 
     public static AttackSlot deserialize(String string) {
@@ -57,6 +59,9 @@ public class AttackSlot {
             }
             if (stringArray.length > 5 && !stringArray[5].isEmpty()) {
                 attackSlot.standoffTiles = Math.max(0, Integer.parseInt(stringArray[5]));
+            }
+            if (stringArray.length > 6 && !stringArray[6].isEmpty()) {
+                attackSlot.retreatPercent = Math.max(0, Math.min(90, Integer.parseInt(stringArray[6])));
             }
         }
         catch (Exception exception) {

@@ -244,19 +244,6 @@ public class AutoAttack
                     settingsTable.checkPref("lunarians-heal-escort", true);
                     settingsTable.checkPref("lunarians-attack-overlay", true);
                     settingsTable.row();
-                    label("lunarians-attack-retreat-builder", "Retreat: Builder % HP", "Recuar: Construtor % HP");
-                    label("lunarians-attack-retreat-healer", "Retreat: Healer % HP", "Recuar: Curandeiro % HP");
-                    label("lunarians-attack-retreat-ranged", "Retreat: Ranged % HP", "Recuar: Distancia % HP");
-                    label("lunarians-attack-retreat-melee", "Retreat: Melee % HP", "Recuar: Melee % HP");
-                    label("lunarians-attack-retreat-tank", "Retreat: Tank % HP", "Recuar: Tank % HP");
-                    label("lunarians-attack-retreat-air", "Retreat: Air % HP", "Recuar: Aereo % HP");
-                    settingsTable.sliderPref("lunarians-attack-retreat-builder", 60, 0, 90, 5, i -> i + "%");
-                    settingsTable.sliderPref("lunarians-attack-retreat-healer", 50, 0, 90, 5, i -> i + "%");
-                    settingsTable.sliderPref("lunarians-attack-retreat-ranged", 40, 0, 90, 5, i -> i + "%");
-                    settingsTable.sliderPref("lunarians-attack-retreat-melee", 30, 0, 90, 5, i -> i + "%");
-                    settingsTable.sliderPref("lunarians-attack-retreat-tank", 20, 0, 90, 5, i -> i + "%");
-                    settingsTable.sliderPref("lunarians-attack-retreat-air", 35, 0, 90, 5, i -> i + "%");
-                    settingsTable.row();
                     label("lunarians-auto-dodge", "Enable projectile dodge", "Ativar desvio de projeteis");
                     label("lunarians-dodge-sensitivity", "Dodge sensitivity", "Sensibilidade do desvio");
                     settingsTable.checkPref("lunarians-auto-dodge", false);
@@ -570,7 +557,7 @@ public class AutoAttack
                     for (int l = seq.size - 1; l >= 0; --l) {
                         final Unit unit2 = (Unit)seq.get(l);
                         final float hpPct = unit2.health / Math.max(1.0f, unit2.maxHealth) * 100.0f;
-                        final int unitFleePct = AutoAttack.fleePercent(unit2.type);
+                        final int unitFleePct = attackSlot.retreatPercent > 0 ? attackSlot.retreatPercent : fleePercent();
                         int contains = AutoAttack.fleeing.contains(unit2.id) ? 1 : 0;
                         if (contains == 0 && hpPct < unitFleePct) {
                             AutoAttack.fleeing.add(unit2.id);
@@ -863,24 +850,6 @@ public class AutoAttack
     
     public static int fleePercent() {
         return Math.max(0, Math.min(90, Core.settings.getInt("lunarians-attack-flee", 0)));
-    }
-
-    // Per-type flee percent based on unit category
-    public static int fleePercent(UnitType type) {
-        if (type == null) return fleePercent();
-        String name = type.name.toLowerCase();
-        // Healer types (mend, heal in name)
-        if (name.contains("mend") || name.contains("heal")) return (int)LunariansSettings.autoAttackRetreatHealer;
-        // Builder types (build speed > 0)
-        if (type.buildSpeed > 0) return (int)LunariansSettings.autoAttackRetreatBuilder;
-        // Air units
-        if (type.flying) return (int)LunariansSettings.autoAttackRetreatAir;
-        // Tank types (high health, armor)
-        if (type.health > 3000 && type.armor > 10) return (int)LunariansSettings.autoAttackRetreatTank;
-        // Melee (low range)
-        if (type.maxRange < 120) return (int)LunariansSettings.autoAttackRetreatMelee;
-        // Ranged (default)
-        return (int)LunariansSettings.autoAttackRetreatRanged;
     }
 
     public static boolean enableAutoDodge() {
