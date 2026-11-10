@@ -152,11 +152,11 @@ public class AutoAttackUi {
         }
         Table table = new Table();
         if (seq.size < 10) {
-            table.button((Drawable)Icon.add, Styles.defaulti, () -> {
+            table.button(AutoAttackUi.tr("+ Add Unit Slot", "+ Adicionar Slot"), () -> {
                 seq.add(new AttackSlot());
                 LunariansSettings.save();
                 AutoAttackUi.reopen();
-            }).size(40.0f).pad(2.0f);
+            }).height(44.0f).pad(4.0f).fillX().uniformX();
         }
         table.button(AutoAttackUi.pasteLabel(), () -> {
             if (clipboard == null) {
