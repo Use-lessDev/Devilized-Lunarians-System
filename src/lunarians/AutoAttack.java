@@ -62,6 +62,18 @@ public class AutoAttack
     private static final Seq<float[]> lines;
     private static final Seq<float[]> shown;
     private static boolean drawReg;
+
+    // Smart path optimization: cached turret data per scan
+    private static final class TurretData {
+        final float x, y, range, rangeSq, threatFactor;
+        TurretData(float x, float y, float range, float threatFactor) {
+            this.x = x; this.y = y; this.range = range;
+            this.rangeSq = range * range;
+            this.threatFactor = threatFactor;
+        }
+    }
+    private static final Seq<TurretData> cachedTurrets = new Seq<>();
+    private static int lastTurretScan = -1;
     
     public static int standoffBlocks() {
         return Math.max(1, Math.min(40, Core.settings.getInt("lunarians-attack-standoff-blocks", 3)));
@@ -251,22 +263,31 @@ public class AutoAttack
     }
     
     private static float turretThreatAt(final Unit unit, final float wx, final float wy) {
-        if (!smartPath() || enemyB == null) return 0f;
+        if (!smartPath() || cachedTurrets == null || cachedTurrets.isEmpty()) return 0f;
         float threat = 0f;
         try {
             final int tx = Mathf.floor(wx / 8f), ty = Mathf.floor(wy / 8f);
             if (!unit.isFlying() && PathSafe.isBadFor(unit, tx, ty)) threat += 45f;
-            final Team myTeam = (Vars.player != null) ? Vars.player.team() : Team.sharded;
-            for (int i = 0; i < enemyB.size; ++i) {
-                final Building b = (Building)enemyB.get(i);
-                if (b == null || b.dead() || b.team == myTeam) continue;
-                if (!(b.block instanceof Turret)) continue;
-                float r = 80f;
-                try { r = ((Turret)b.block).range; } catch (Throwable ignored) { r = 80f; }
-                if (r <= 0f) r = 80f;
-                final float d = Mathf.dst(wx, wy, b.x, b.y);
-                if (d < r * 1.2f) {
-                    threat += (1f - Mathf.clamp(d / Math.max(8f, r * 1.2f))) * 20f;
+            // Early exit: if no turrets in range at all, return early
+            boolean anyNear = false;
+            for (int i = 0; i < cachedTurrets.size; ++i) {
+                final TurretData td = cachedTurrets.get(i);
+                final float dx = wx - td.x;
+                final float dy = wy - td.y;
+                if (dx * dx + dy * dy < td.rangeSq * 1.44f) { // 1.2^2 = 1.44
+                    anyNear = true;
+                    break;
+                }
+            }
+            if (!anyNear) return threat; // only tile penalty
+            for (int i = 0; i < cachedTurrets.size; ++i) {
+                final TurretData td = cachedTurrets.get(i);
+                final float dx = wx - td.x;
+                final float dy = wy - td.y;
+                final float d2 = dx * dx + dy * dy;
+                if (d2 < td.rangeSq * 1.44f) {
+                    final float d = Mathf.sqrt(d2);
+                    threat += (1f - Mathf.clamp(d / (td.range * 1.2f))) * td.threatFactor;
                 }
             }
         } catch (Throwable ignored) {}
@@ -297,7 +318,7 @@ public class AutoAttack
         float bestScore = Float.MAX_VALUE;
         float bestX = building.x + Mathf.cos(baseAng + formationOffsetRad) * baseDist;
         float bestY = building.y + Mathf.sin(baseAng + formationOffsetRad) * baseDist;
-        final int samples = 12;
+        final int samples = 8; // Reduced from 12 for performance
         for (int i = 0; i < samples; ++i) {
             final float ang = baseAng + formationOffsetRad + (i - samples / 2f) * ((float)Math.PI * 2f / 18f);
             final float dist = baseDist * (1f + ((i % 3 == 0) ? 0.18f : 0f));
@@ -374,6 +395,22 @@ public class AutoAttack
                     continue;
                 }
                 AutoAttack.enemyB.add(building);
+            }
+        }
+        // Cache turret data for smart path optimization
+        AutoAttack.cachedTurrets.clear();
+        int scanFrame = (int)Time.time;
+        if (scanFrame != AutoAttack.lastTurretScan) {
+            AutoAttack.lastTurretScan = scanFrame;
+            for (final Building building : AutoAttack.enemyB) {
+                if (building != null && building.isValid() && building.block instanceof Turret) {
+                    float range = 80f;
+                    try { range = ((Turret)building.block).range; } catch (Throwable ignored) { range = 80f; }
+                    if (range > 0f) {
+                        float threatFactor = 20f;
+                        AutoAttack.cachedTurrets.add(new AutoAttack.TurretData(building.x, building.y, range, threatFactor));
+                    }
+                }
             }
         }
         int n2 = 0;
