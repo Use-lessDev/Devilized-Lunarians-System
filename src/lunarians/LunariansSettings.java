@@ -89,6 +89,16 @@ public class LunariansSettings {
     public static boolean enableAutoAttack = false;
     public static boolean autoAttackHeal = true;
 
+    // AutoAttack settings
+    public static int standoffBlocks = 3;
+    public static boolean regroupEnabled = false;
+    public static int regroupSec = 5;
+    public static boolean smartTargets = true;
+    public static boolean formationOn = true;
+    public static boolean overlayOn = true;
+    public static boolean smartPath = false;
+    public static int fleePercent = 0;
+
         // AutoAttack: Projectile evasion
         public static boolean enableAutoDodge = false;
         public static float autoDodgeSensitivity = 1.0f;
@@ -390,6 +400,16 @@ public class LunariansSettings {
         pvpDelay = Core.settings.getFloat("lunarians-balanced-delay", Core.settings.getFloat("lunarians-pvp-delay", 4.5f));
         autoAttackHeal = Core.settings.getBool("lunarians-attack-heal", true);
 
+        // AutoAttack settings
+        standoffBlocks = Core.settings.getInt("lunarians-attack-standoff-blocks", 3);
+        regroupEnabled = Core.settings.getBool("lunarians-attack-regroup", false);
+        regroupSec = Core.settings.getInt("lunarians-attack-regroup-sec", 5);
+        smartTargets = Core.settings.getBool("lunarians-attack-smart", true);
+        formationOn = Core.settings.getBool("lunarians-attack-formation", true);
+        overlayOn = Core.settings.getBool("lunarians-attack-overlay", true);
+        smartPath = Core.settings.getBool("lunarians-attack-smart-path", false);
+        fleePercent = Core.settings.getInt("lunarians-attack-flee", 0);
+
         // AutoAttack: Projectile evasion
         enableAutoDodge = Core.settings.getBool("lunarians-auto-dodge", false);
         autoDodgeSensitivity = Core.settings.getFloat("lunarians-dodge-sensitivity", 1.0f);
@@ -512,6 +532,16 @@ public class LunariansSettings {
         Core.settings.put("lunarians-pvp-delay", (Object)Float.valueOf(pvpDelay));
         Core.settings.put("lunarians-balanced-delay", (Object)Float.valueOf(pvpDelay));
         Core.settings.put("lunarians-attack-heal", (Object)autoAttackHeal);
+
+        // AutoAttack settings
+        Core.settings.put("lunarians-attack-standoff-blocks", (Object)standoffBlocks);
+        Core.settings.put("lunarians-attack-regroup", (Object)regroupEnabled);
+        Core.settings.put("lunarians-attack-regroup-sec", (Object)regroupSec);
+        Core.settings.put("lunarians-attack-smart", (Object)smartTargets);
+        Core.settings.put("lunarians-attack-formation", (Object)formationOn);
+        Core.settings.put("lunarians-attack-overlay", (Object)overlayOn);
+        Core.settings.put("lunarians-attack-smart-path", (Object)smartPath);
+        Core.settings.put("lunarians-attack-flee", (Object)fleePercent);
 
         // AutoAttack: Retreat per unit type
         // AutoAttack: Projectile evasion
