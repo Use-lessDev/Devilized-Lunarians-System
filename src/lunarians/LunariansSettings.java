@@ -409,6 +409,10 @@ public class LunariansSettings {
         overlayOn = Core.settings.getBool("lunarians-attack-overlay", true);
         smartPath = Core.settings.getBool("lunarians-attack-smart-path", false);
         fleePercent = Core.settings.getInt("lunarians-attack-flee", 0);
+        // IMPORTANTE: força fleePercent = 0 para evitar unidades fugirem
+        // e parecerem "paradas" quando o mod reinicia ou muitas features são ativadas.
+        fleePercent = 0;
+        Core.settings.put("lunarians-attack-flee", 0);
 
         // AutoAttack: Projectile evasion
         enableAutoDodge = Core.settings.getBool("lunarians-auto-dodge", false);
