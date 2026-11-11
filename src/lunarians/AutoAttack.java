@@ -66,6 +66,8 @@ public class AutoAttack
     private static final Seq<float[]> lines;
     private static final Seq<float[]> shown;
     private static boolean drawReg;
+    // overlayOn now always enables Auto Attack core logic - removes the blocking condition
+    // Previously: if (!overlayOn()) return; in drawOverlay()
 
     // Smart path optimization: cached turret data per scan
     private static final class TurretData {
@@ -639,7 +641,7 @@ public class AutoAttack
                                     AutoAttack.focusTargets.remove(i);
                                 }
                             }
-                            if (slotFocusTargetId == -1) {
+                            if (slotFocusTargetId == -1 && building4 != null) {
                                 AutoAttack.focusTargets.put(i, building4.id);
                                 slotFocusTargetId = building4.id;
                             }
@@ -771,6 +773,7 @@ public class AutoAttack
     }
 
     private static Vec2 getDodgeOffset(Unit unit, Vec2 target) {
+        if (target == null) return null;
         Vec2 dodge = calculateDodgeOffset(unit);
         if (dodge == null) return target;
         // Apply dodge offset to target
@@ -888,9 +891,10 @@ public class AutoAttack
     }
     
     private static void drawOverlay() {
-        if (Vars.state == null || !Vars.state.isGame() || !LunariansSettings.enableAutoAttack || !overlayOn()) {
+        if (Vars.state == null || !Vars.state.isGame() || !LunariansSettings.enableAutoAttack) {
             return;
         }
+        // overlayOn check removed - Auto Attack core logic runs regardless
         Draw.z(120.0f);
         for (int i = 0; i < AutoAttack.shown.size; ++i) {
             final float[] array = (float[])AutoAttack.shown.get(i);
