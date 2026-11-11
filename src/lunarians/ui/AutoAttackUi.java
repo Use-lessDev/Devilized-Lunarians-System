@@ -135,7 +135,7 @@ public class AutoAttackUi {
             Core.settings.put("lunarians-debug-visual", (Object)bl);
         }).left();
         table.add((Element)table3g).left().padBottom(4.0f).row();
-        table.add((Element)table3b).left().padBottom(4.0f).row();
+        table.add((Element)this.list).left().growX().row();
         this.rebuild();
     }
 
