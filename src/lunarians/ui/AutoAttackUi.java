@@ -92,13 +92,15 @@ public class AutoAttackUi {
         }).left();
         table.add((Element)table3).left().padBottom(2.0f).row();
         Table table3b = new Table();
-        table3b.check(AutoAttackUi.tr("Smart path (fewer turrets, safer route to core)", "Rota inteligente (menos torres, rota segura ate o nucleo)"), Core.settings.getBool("lunarians-attack-smart-path", false), bl -> {
-            Core.settings.put("lunarians-attack-smart-path", (Object)bl);
+        table3b.check(AutoAttackUi.tr("Smart path (fewer turrets, safer route to core)", "Rota inteligente (menos torres, rota segura ate o nucleo)"), AutoAttack.smartPath(), bl -> {
+            LunariansSettings.smartPath = bl;
+            LunariansSettings.save();
         }).left();
         table.add((Element)table3b).left().padBottom(4.0f).row();
         Table table3c = new Table();
         table3c.check(AutoAttackUi.tr("Enable projectile dodge", "Ativar desvio de projeteis"), AutoAttack.enableAutoDodge(), bl -> {
-            Core.settings.put("lunarians-auto-dodge", (Object)bl);
+            LunariansSettings.enableAutoDodge = bl;
+            LunariansSettings.save();
         }).left();
         table.add((Element)table3c).left().padBottom(2.0f).row();
         Table table3d = new Table();
@@ -107,7 +109,8 @@ public class AutoAttackUi {
         dodgeSlider.setValue(AutoAttack.autoDodgeSensitivity());
         Label dodgeLabel = new Label(() -> String.format("%.1f", AutoAttack.autoDodgeSensitivity()));
         dodgeSlider.moved(f -> {
-            Core.settings.put("lunarians-dodge-sensitivity", (Object)Float.valueOf(f));
+            LunariansSettings.autoDodgeSensitivity = f * 10f;
+            LunariansSettings.save();
             dodgeLabel.setText(String.format("%.1f", f));
         });
         table3d.add((Element)dodgeSlider).width(160.0f);
@@ -115,7 +118,8 @@ public class AutoAttackUi {
         table.add((Element)table3d).left().padBottom(2.0f).row();
         Table table3e = new Table();
         table3e.check(AutoAttackUi.tr("Enable focus fire (coordinated target)", "Ativar foco coordenado (alvo compartilhado)"), AutoAttack.enableFocusFire(), bl -> {
-            Core.settings.put("lunarians-focus-fire", (Object)bl);
+            LunariansSettings.enableFocusFire = bl;
+            LunariansSettings.save();
         }).left();
         table.add((Element)table3e).left().padBottom(2.0f).row();
         Table table3f = new Table();
@@ -124,7 +128,8 @@ public class AutoAttackUi {
         focusSlider.setValue(AutoAttack.focusFireRange());
         Label focusLabel = new Label(() -> String.format("%.0f", AutoAttack.focusFireRange()));
         focusSlider.moved(f -> {
-            Core.settings.put("lunarians-focus-range", (Object)Float.valueOf(f));
+            LunariansSettings.focusFireRange = f;
+            LunariansSettings.save();
             focusLabel.setText(String.format("%.0f", f));
         });
         table3f.add((Element)focusSlider).width(160.0f);
@@ -132,7 +137,8 @@ public class AutoAttackUi {
         table.add((Element)table3f).left().padBottom(2.0f).row();
         Table table3g = new Table();
         table3g.check(AutoAttackUi.tr("Debug visual (colored unit squares)", "Visual debug (quadrados coloridos nas unidades)"), AutoAttack.enableDebugVisual(), bl -> {
-            Core.settings.put("lunarians-debug-visual", (Object)bl);
+            LunariansSettings.enableDebugVisual = bl;
+            LunariansSettings.save();
         }).left();
         table.add((Element)table3g).left().padBottom(4.0f).row();
         table.add((Element)this.list).left().growX().row();
@@ -218,7 +224,7 @@ public class AutoAttackUi {
         }).size(32.0f, 28.0f);
         table2.add((Element)table4).left().padTop(2.0f).row();
         if (unitType != null) {
-            final int maxStandoff = AutoAttack.maxStandoffTiles(unitType);
+            final int maxStandoff = AutoAttack.maxStandoffTilesType(unitType);
             table = new Table();
             table.add((CharSequence)AutoAttackUi.tr("Attack distance", "Dist. ataque")).left().padRight(4.0f).fontScale(0.85f);
             table.button("-", () -> {
